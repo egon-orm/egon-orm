@@ -18,7 +18,7 @@ Add: &#123;add&#125;
 
 ## `constraint.violated` {#constraint-violated}
 
-> &#123;details.message&#125;
+> &#123;message&#125;
 
 > The database rejected the write: &#123;what&#125; constraint&#123;name&#125;&#123;where&#125; was violated.
 

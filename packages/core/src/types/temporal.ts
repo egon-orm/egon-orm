@@ -9,6 +9,7 @@
  */
 import type { CastResult, FieldType } from "../contracts/type.js";
 import { CastError, SchemaDefinitionError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { defineType } from "./define.js";
 import { INVALID, integerType } from "./scalars.js";
 
@@ -119,7 +120,11 @@ function dateTextToMillis(text: string): number {
 /** Reads `{ year, month, day }`, each a whole number or a string of digits (form input). */
 function dateObjectToMillis(input: object): number {
   try {
-    const { year, month, day } = input as { year?: unknown; month?: unknown; day?: unknown };
+    // Own properties only: a year, month or day planted on Object.prototype is not input.
+    const parts = input as { year?: unknown; month?: unknown; day?: unknown };
+    const year = own(parts, "year");
+    const month = own(parts, "month");
+    const day = own(parts, "day");
     if (year == null || month == null || day == null) return Number.NaN;
     const integer = integerType();
     const y = integer.cast(year);
@@ -234,7 +239,7 @@ export interface DateOptions {
 export function dateType(options?: { readonly as?: "string" }): FieldType<string, string>;
 export function dateType(options: { readonly as: "date" }): FieldType<Date, string>;
 export function dateType(options?: DateOptions): FieldType<string, string> | FieldType<Date, string> {
-  const as = options?.as ?? "string";
+  const as = own(options, "as") ?? "string";
   if (as === "string") return DATE;
   if (as === "date") return DATE_AS_DATE;
   throw new SchemaDefinitionError(
@@ -388,7 +393,7 @@ function pickPrecision(
   types: Readonly<Record<TimestampPrecision, FieldType<Date, Date>>>,
   options: TimestampOptions | undefined,
 ): FieldType<Date, Date> {
-  const precision = options?.precision ?? "ms";
+  const precision = own(options, "precision") ?? "ms";
   if (precision === "s" || precision === "ms" || precision === "us") return types[precision];
   throw new SchemaDefinitionError(
     "schema.precisionOption",

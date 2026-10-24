@@ -22,6 +22,7 @@ import type { CompiledQuery } from "../contracts/adapter.js";
 import type { QueryNode, QueryOperation } from "../contracts/query.js";
 import { hashInt, hashString } from "../internal/hash.js";
 import { LruCache } from "../internal/lru.js";
+import { own } from "../internal/own.js";
 import { sameShape } from "./same-shape.js";
 
 /**
@@ -132,7 +133,7 @@ export class PlanCache {
     this.#shapes = new LruCache(options.capacity);
     this.#writes = new LruCache(options.capacity);
     this.#keyLists = options.keyLists;
-    this.#keyOf = options.keyOf;
+    this.#keyOf = own(options, "keyOf");
   }
 
   /**

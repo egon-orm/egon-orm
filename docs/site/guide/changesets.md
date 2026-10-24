@@ -72,6 +72,8 @@ They can just as well be static methods on the schema class, like `User.changese
   anyway). For a new record, "current" is the field's default.
 - `permitted` is type-checked; an unknown field name throws. An association or an embed
   cannot be cast this way: use `castAssoc` and `castEmbed`.
+- A name listed twice counts once, here and in the lists given to `validateRequired`,
+  `uniqueConstraint` and `validateUniqueAsync`: it gives one error at most.
 - Casting a changeset again merges the new params and changes into it and keeps its
   errors.
 

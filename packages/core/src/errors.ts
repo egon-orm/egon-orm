@@ -13,6 +13,7 @@
  * @module
  */
 import type { ChangesetLike } from "./contracts/changeset.js";
+import { own } from "./internal/own.js";
 import type { messages } from "./messages/catalog.js";
 
 /**
@@ -237,10 +238,10 @@ export abstract class EgonError extends Error {
    * @param details The catalog entry's parameters, and the underlying error.
    */
   constructor(id: ErrorId, message: string, details?: ErrorDetails) {
-    const cause = details?.cause;
-    super(compose(id, message, details?.params), cause === undefined ? undefined : { cause });
+    const cause = own(details, "cause");
+    super(compose(id, message, own(details, "params")), cause === undefined ? undefined : { cause });
     this.id = id;
-    parts.set(this, { short: message, params: details?.params });
+    parts.set(this, { short: message, params: own(details, "params") });
   }
 
   /**
@@ -351,10 +352,11 @@ export class NoResultsError extends EgonError {
   readonly query: string | undefined;
 
   constructor(details: { readonly query?: string; readonly cause?: unknown } = {}) {
-    super("noResults", `Expected at least one result but got none${inQuery(details.query)}.`, {
-      cause: details.cause,
+    const query = own(details, "query");
+    super("noResults", `Expected at least one result but got none${inQuery(query)}.`, {
+      cause: own(details, "cause"),
     });
-    this.query = details.query;
+    this.query = query;
   }
 }
 
@@ -375,13 +377,12 @@ export class MultipleResultsError extends EgonError {
   readonly query: string | undefined;
 
   constructor(details: { readonly count: number; readonly query?: string; readonly cause?: unknown }) {
-    super(
-      "multipleResults",
-      `Expected at most one result but got ${details.count}${inQuery(details.query)}.`,
-      { cause: details.cause },
-    );
+    const query = own(details, "query");
+    super("multipleResults", `Expected at most one result but got ${details.count}${inQuery(query)}.`, {
+      cause: own(details, "cause"),
+    });
     this.count = details.count;
-    this.query = details.query;
+    this.query = query;
   }
 }
 
@@ -425,7 +426,7 @@ export class InvalidChangesetError<C extends ChangesetLike = ChangesetLike> exte
     super(
       "invalidChangeset",
       `Could not perform ${details.action} because the changeset is invalid.\n\nErrors:\n${listing}`,
-      { cause: details.cause },
+      { cause: own(details, "cause") },
     );
     this.action = details.action;
     this.changeset = details.changeset;
@@ -454,7 +455,7 @@ export class StaleEntryError extends EgonError {
       `Attempted to ${details.action} a stale ${details.schema} row: no row matched its primary key${
         details.action === "update" ? " and lock version" : ""
       }.`,
-      { cause: details.cause },
+      { cause: own(details, "cause") },
     );
     this.action = details.action;
     this.schema = details.schema;
@@ -515,29 +516,30 @@ export class ConstraintError extends EgonError {
   }) {
     const what =
       details.type === "notNull" ? "not-null" : details.type === "foreignKey" ? "foreign-key" : details.type;
-    const name = details.constraint === undefined ? "" : ` "${details.constraint}"`;
+    // Every key is read as the details' own: a key planted on Object.prototype is none.
+    const constraint = own(details, "constraint");
+    const table = own(details, "table");
+    const column = own(details, "column");
+    const message = own(details, "message");
+    const cause = own(details, "cause");
+    const name = constraint === undefined ? "" : ` "${constraint}"`;
     const where =
-      details.table === undefined
-        ? ""
-        : ` on table "${details.table}"${details.column === undefined ? "" : `, column "${details.column}"`}`;
-    if (details.message !== undefined) {
-      super(details.id ?? "constraint.violated", details.message, {
-        params: details.params,
-        cause: details.cause,
-      });
+      table === undefined ? "" : ` on table "${table}"${column === undefined ? "" : `, column "${column}"`}`;
+    if (message !== undefined) {
+      super(own(details, "id") ?? "constraint.violated", message, { params: own(details, "params"), cause });
     } else {
       super(
         "constraint.violated",
         `The database rejected the write: ${what} constraint${name}${where} was violated.`,
-        { cause: details.cause },
+        { cause },
       );
     }
     this.type = details.type;
-    this.constraint = details.constraint;
-    this.table = details.table;
-    this.column = details.column;
-    this.detail = details.detail;
-    this.sql = details.sql;
+    this.constraint = constraint;
+    this.table = table;
+    this.column = column;
+    this.detail = own(details, "detail");
+    this.sql = own(details, "sql");
   }
 }
 
@@ -606,7 +608,7 @@ export class NotLoadedError extends EgonError {
   constructor(details: { readonly schema: string; readonly association: string; readonly cause?: unknown }) {
     super("notLoaded", `Association "${details.association}" of ${details.schema} is not loaded.`, {
       params: { association: details.association },
-      cause: details.cause,
+      cause: own(details, "cause"),
     });
     this.schema = details.schema;
     this.association = details.association;
@@ -655,9 +657,10 @@ export class DatabaseError extends EgonError {
     } = {},
   ) {
     super(id, message, details);
-    this.code = details.code ?? "database";
-    this.retryable = details.retryable ?? (this.code === "serializationFailure" || this.code === "deadlock");
-    this.sql = details.sql;
+    this.code = own(details, "code") ?? "database";
+    this.retryable =
+      own(details, "retryable") ?? (this.code === "serializationFailure" || this.code === "deadlock");
+    this.sql = own(details, "sql");
   }
 }
 
@@ -697,10 +700,10 @@ export class RollbackError<R = unknown> extends EgonError {
     readonly cause?: unknown;
   }) {
     super(
-      details.id ?? "rollback.called",
-      details.message ??
+      own(details, "id") ?? "rollback.called",
+      own(details, "message") ??
         "The transaction was rolled back: tx.rollback(reason) was called, and the reason is error.reason.",
-      { params: details.params, cause: details.cause },
+      { params: own(details, "params"), cause: own(details, "cause") },
     );
     this.reason = details.reason;
   }
@@ -776,8 +779,8 @@ export class MigrationError extends EgonError {
     } = {},
   ) {
     super(id, message, details);
-    this.version = details.version;
-    this.migration = details.migration;
-    this.sql = details.sql;
+    this.version = own(details, "version");
+    this.migration = own(details, "migration");
+    this.sql = own(details, "sql");
   }
 }

@@ -73,9 +73,39 @@ export const SQLITE_RUNTIME: SqliteRuntime = {
     const load = requireFor(import.meta.url, typeof require === "function" ? require : undefined);
     const manifest = load?.("better-sqlite3/package.json") as { version?: unknown } | undefined;
     if (typeof manifest?.version === "string") checkRuntime(manifest.version, process.versions.napi);
-    return new Database(settings.filename, { readonly: settings.readonly });
+    return new Database(settings.filename, databaseOptions(settings));
   },
 };
+
+/**
+ * The options of `new Database(filename, options)`. better-sqlite3 tests each option with
+ * `in` (checked against better-sqlite3 12.11.1 and 13.0.3, `lib/database.js` and
+ * `lib/util.js`), so an option planted on `Object.prototype` would reach it:
+ * `nativeBinding` loads a native addon, `verbose` is handed every statement. The object has
+ * no prototype, so no inherited key reaches the driver (owner decision, 2026-10-24); the
+ * options Egon has a value or a default for are set as own properties, with the driver's
+ * own defaults. Left out, and absent because there is no prototype: `nativeBinding` (the
+ * per-platform entry points of 13.x, such as `better-sqlite3/darwin-arm64`, refuse
+ * `'nativeBinding' in options` even for `null`; absent, the driver loads its own addon),
+ * and `readOnly` and `memory`, which it reads only to refuse them.
+ *
+ * @example
+ * ```ts
+ * databaseOptions({ filename: ":memory:", readonly: false, pragmas: [], attach: [] });
+ * // { readonly: false, fileMustExist: false, timeout: 5000, verbose: null }
+ * ```
+ */
+export function databaseOptions(settings: OpenSettings): Database.Options {
+  const options = Object.create(null) as {
+    -readonly [K in keyof Database.Options]-?: Database.Options[K] | null;
+  };
+  options.readonly = settings.readonly;
+  options.fileMustExist = false;
+  options.timeout = 5000;
+  options.verbose = null;
+  // No nativeBinding, not even null: 13.x's per-platform entry points throw when it is present.
+  return options as Database.Options;
+}
 
 const EMPTY_ROWS: readonly Record<string, unknown>[] = /* @__PURE__ */ Object.freeze([]);
 

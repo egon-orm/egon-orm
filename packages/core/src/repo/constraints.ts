@@ -21,19 +21,21 @@ import { type Changeset, withAction, withErrors } from "../changeset/changeset.j
 import type { Action, ChangesetError, Constraint, ConstraintType } from "../contracts/changeset.js";
 import type { AnySchema, SchemaMeta } from "../contracts/schema.js";
 import { ConstraintError, type ConstraintViolationType } from "../errors.js";
+import { frozenOptions } from "../internal/own.js";
 import { meta } from "../schema/schema.js";
 
 /** A changeset of any source, as the repo handles it. */
 type AnyChangeset = Changeset<AnySchema, boolean>;
 
 /** The declared types that a violation of each type can match. */
-const MATCHING_TYPES: Readonly<Record<ConstraintViolationType, readonly ConstraintType[]>> = {
-  unique: ["unique"],
-  foreignKey: ["foreignKey", "noAssoc"],
-  check: ["check"],
-  exclusion: ["exclusion"],
-  notNull: [],
-};
+const MATCHING_TYPES: Readonly<Record<ConstraintViolationType, readonly ConstraintType[]>> =
+  /* @__PURE__ */ frozenOptions({
+    unique: ["unique"],
+    foreignKey: ["foreignKey", "noAssoc"],
+    check: ["check"],
+    exclusion: ["exclusion"],
+    notNull: [],
+  });
 
 /**
  * Whether a declared constraint name matches the name the database reported.
@@ -93,13 +95,13 @@ export function shortenedName(table: string, columns: string, label: string, max
 }
 
 /** The suffix of each declared type's default name; a check constraint has none. */
-const LABELS: Readonly<Record<ConstraintType, string | undefined>> = {
+const LABELS: Readonly<Record<ConstraintType, string | undefined>> = /* @__PURE__ */ frozenOptions({
   unique: "key",
   foreignKey: "fkey",
   noAssoc: "fkey",
   exclusion: "excl",
   check: undefined,
-};
+});
 
 /**
  * Where names are shortened: the dialect's identifier limit in bytes (`undefined` when it
@@ -215,13 +217,13 @@ export function handleViolation<C extends AnyChangeset>(
 // The message of an unhandled violation
 // ---------------------------------------------------------------------------
 
-const VIOLATION_WORDS: Readonly<Record<ConstraintViolationType, string>> = {
+const VIOLATION_WORDS: Readonly<Record<ConstraintViolationType, string>> = /* @__PURE__ */ frozenOptions({
   unique: "unique",
   foreignKey: "foreign-key",
   check: "check",
   exclusion: "exclusion",
   notNull: "not-null",
-};
+});
 
 /** "insert into", "update of", "delete from". */
 function actionPhrase(action: Action): string {

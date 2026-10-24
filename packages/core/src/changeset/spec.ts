@@ -6,6 +6,7 @@
  */
 import type { AnySchema, FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { CastError, QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { fieldState, isRow, isSchema, meta } from "../schema/index.js";
 import { refuseGeneration } from "./validators/generated.js";
@@ -157,7 +158,8 @@ export function startOf(target: unknown, fn: "cast" | "change"): Start {
     const model = classOfRow(target);
     if (model !== undefined) return { spec: specOfSchema(model), data: target };
     if (isPlainObject(target) && Object.hasOwn(target, "types")) {
-      const { data, types } = target as { readonly data?: unknown; readonly types: unknown };
+      const { types } = target as { readonly types: unknown };
+      const data = own(target as { readonly data?: unknown }, "data");
       const spec = specOfTypes(types);
       if (typeof data !== "object" || data === null || !isPlainObject(data)) {
         throw new QueryError(

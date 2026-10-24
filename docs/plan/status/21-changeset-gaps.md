@@ -223,6 +223,12 @@ None. No configuration changed, no Stryker patch, no TypeScript checker for Stry
 
 ## Requests
 
+**Resolved (2026-10-24).** The owner decided all three on 2026-10-24, and
+`step/21-hardening` made the changes: a name listed twice is processed once (option b),
+every options read is of own properties only, and mutation runs seed fast-check. See
+`status/21-hardening.md`. The behaviour the rows held for the owner (411, 1526, 1544) turn on is now tested
+there (the code changed, so those mutants are not the same ones; not re-run). The requests as they were raised:
+
 - **For the owner: a field name listed twice.** `validateRequired(["email", "email"])` on a
   blank email gives two identical "can't be blank" errors, and a first
   `cast(User, { age: "x" }, ["age", "age"])` two identical cast errors; a cast over an

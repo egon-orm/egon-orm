@@ -21,6 +21,7 @@ import type {
 import type { AnyFieldType } from "../../contracts/type.js";
 import { QueryError } from "../../errors.js";
 import { HASH_SEED, hashInt, hashString } from "../../internal/hash.js";
+import { own } from "../../internal/own.js";
 import { isPlainObject } from "../../internal/plain-object.js";
 import { bigintType, floatType, integerType } from "../../types/index.js";
 import {
@@ -556,7 +557,10 @@ export function windowDef(name: string, spec: unknown): WindowDefNode {
       `${where}: a window has no ${extra.map((key) => `"${key}"`).join(", ")}.`,
     );
   }
-  const { partitionBy, orderBy, frame } = spec as Record<string, unknown>;
+  const given = spec as Readonly<Record<string, unknown>>;
+  const partitionBy = own(given, "partitionBy");
+  const orderBy = own(given, "orderBy");
+  const frame = own(given, "frame");
   const partition: ExprNode[] = [];
   for (const item of listOf(partitionBy, where, "partitionBy")) {
     if (!isExpr(item))

@@ -17,6 +17,7 @@ import type { CombinationNode, QueryAst, SelectShape } from "../../contracts/que
 import type { SchemaMeta } from "../../contracts/schema.js";
 import { QueryError } from "../../errors.js";
 import { HASH_SEED, hashInt, hashString } from "../../internal/hash.js";
+import { own } from "../../internal/own.js";
 
 /**
  * The SQL set operations.
@@ -113,7 +114,7 @@ function skeleton(ast: QueryAst, method: string): Skeleton | undefined {
   const root = ast.from;
   if (root.kind === "subquerySource") return skeleton(root.query, method);
   // A table or a CTE typed by a schema; a values list or a fragment has no `meta`.
-  const rows = (root as { readonly meta?: SchemaMeta | undefined }).meta;
+  const rows = own(root as { readonly meta?: SchemaMeta | undefined }, "meta");
   return rows === undefined ? undefined : { kind: "row", meta: rows };
 }
 

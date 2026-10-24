@@ -7,6 +7,7 @@ import type { AnyFieldType, CastResult, DbType, FieldType } from "../contracts/t
 import { IDENTITY } from "../contracts/type.js";
 import { CastError, SchemaDefinitionError } from "../errors.js";
 import { deepEqual } from "../internal/deep-equal.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { defineType, detached, parameterized } from "./define.js";
 import { INVALID } from "./scalars.js";
@@ -168,12 +169,13 @@ const arrayOf = /* @__PURE__ */ parameterized((element: AnyFieldType): AnyFieldT
     result: CastResult<unknown> & { success: false },
     index: number,
   ): CastResult<never> => {
-    const inner = nested ? result.meta?.path : undefined;
+    // A failure such as the built-in INVALID has no message or meta of its own.
+    const failureMeta = own(result, "meta");
+    const message = own(result, "message");
+    const inner = nested ? own(failureMeta, "path") : undefined;
     const path = Array.isArray(inner) ? [index, ...(inner as readonly unknown[])] : [index];
-    const meta = { ...result.meta, index, path };
-    return result.message === undefined
-      ? { success: false, meta }
-      : { success: false, message: result.message, meta };
+    const meta = { ...failureMeta, index, path };
+    return message === undefined ? { success: false, meta } : { success: false, message, meta };
   };
 
   const castElements = (input: readonly unknown[]): CastResult<unknown[]> => {

@@ -16,9 +16,10 @@ import {
   type MigrationStatus,
   type Migrator,
 } from "egon-orm/migration";
-import { CliError, type EgonConfig, type LoadedConfig, loadConfig } from "./config.js";
+import { CliError, type EgonConfig, type LoadedConfig, loadConfig, type MigrationsConfig } from "./config.js";
 import { MAX_NAME_LENGTH, MIGRATION_NAME, migrationTemplate, versionAt } from "./create.js";
 import { COMMAND_HELP, MAIN_HELP } from "./help.js";
+import { own } from "./own.js";
 import { VERSION } from "./version.js";
 
 /**
@@ -142,8 +143,14 @@ export async function run(argv: readonly string[], io: CliIo = processIo()): Pro
 function report(io: CliIo, json: boolean, error: unknown): void {
   const egon = isEgonError(error) ? error : undefined;
   const message = error instanceof Error ? error.message : String(error);
+  // The error's own properties only: an error that is not Egon's may have none of these.
+  const details =
+    typeof error === "object" && error !== null
+      ? (error as { readonly version?: unknown; readonly sql?: unknown; readonly cause?: unknown })
+      : undefined;
+  const sql = own(details, "sql");
   if (json) {
-    const details = error as { readonly version?: unknown; readonly sql?: unknown };
+    const version = own(details, "version");
     io.stdout(
       `${JSON.stringify({
         ok: false,
@@ -151,17 +158,16 @@ function report(io: CliIo, json: boolean, error: unknown): void {
           name: error instanceof Error ? error.name : "Error",
           code: egon?.code,
           message,
-          version: typeof details?.version === "number" ? details.version : undefined,
-          sql: typeof details?.sql === "string" ? details.sql : undefined,
+          version: typeof version === "number" ? version : undefined,
+          sql: typeof sql === "string" ? sql : undefined,
         },
       })}\n`,
     );
     return;
   }
   io.stderr(`error: ${message}\n`);
-  const sql = (error as { readonly sql?: unknown } | null)?.sql;
   if (typeof sql === "string") io.stderr(`  in: ${sql}\n`);
-  const cause = (error as { readonly cause?: unknown } | null)?.cause;
+  const cause = own(details, "cause");
   if (
     egon === undefined &&
     !(error instanceof CliError) &&
@@ -175,6 +181,11 @@ function report(io: CliIo, json: boolean, error: unknown): void {
     io.stderr(`  caused by: ${cause.message}\n`);
   }
 }
+
+/** No migrations settings: no prototype, so a key planted on Object.prototype is no setting. */
+const NO_MIGRATIONS: MigrationsConfig = /* @__PURE__ */ Object.freeze(
+  /* @__PURE__ */ Object.create(null) as MigrationsConfig,
+);
 
 function processIo(): CliIo {
   return {
@@ -211,7 +222,7 @@ async function withConfig<T>(
 }
 
 function migratorFor(loaded: LoadedConfig, log: ((event: MigrationEvent) => void) | undefined): Migrator {
-  const { migrations: list, directory, ...options } = loaded.config.migrations ?? {};
+  const { migrations: list, directory, ...options } = loaded.config.migrations ?? NO_MIGRATIONS;
   return createMigrator({
     ...options,
     adapter: loaded.config.adapter,
@@ -430,7 +441,7 @@ async function db(args: readonly string[], io: CliIo): Promise<number> {
   if (action === undefined || !["create", "drop", "reset"].includes(action) || extra.length > 0) {
     throw new UsageError(`db takes one of create, drop and reset.\n\n${COMMAND_HELP.db}`);
   }
-  if (io.env.NODE_ENV === "production" && values.force !== true) {
+  if (own(io.env, "NODE_ENV") === "production" && values.force !== true) {
     throw new CliError(
       `Refusing to run "egon db ${action}" with NODE_ENV=production: it ${action === "create" ? "creates" : "destroys"} a whole database. Pass --force if you mean it.`,
     );

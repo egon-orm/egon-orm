@@ -7,6 +7,7 @@
 import type { AnyFieldType, AnySchema, EmbedMeta, FieldMeta, FieldValues, InsertShape } from "egon-orm";
 import { EmbeddedSchema, meta, QueryError, t } from "egon-orm";
 import { z } from "zod";
+import { own } from "./own.js";
 
 /**
  * Which shape `toZod` derives: `"row"` (every field, as in a row), `"insert"` (the
@@ -130,7 +131,9 @@ function accepts(type: AnyFieldType, value: unknown): boolean {
 const protoOf = Object.prototype.isPrototypeOf;
 
 function hintOf(type: AnyFieldType): z.ZodType | undefined {
-  const hint: unknown = (type as Partial<ZodHint>).zod;
+  // An own property only (the hint is added to the type object, ZodHint): a `zod` planted on
+  // Object.prototype is no hint, and the built-in types have none.
+  const hint: unknown = own(type as Partial<ZodHint>, "zod");
   if (hint === undefined) return undefined;
   const schema: unknown = typeof hint === "function" ? (hint as () => unknown)() : hint;
   if (!(schema instanceof z.ZodType)) {
@@ -318,12 +321,12 @@ export function toZod<
   schema: S,
   options?: ToZodOptions<S, M, P, O>,
 ): z.ZodObject<ToZodShape<S, M, Exclude<P & ToZodKeys<S, M>, O>>> {
-  const mode: unknown = options?.mode ?? "row";
+  const mode: unknown = own(options, "mode") ?? "row";
   if (mode !== "row" && mode !== "insert" && mode !== "update") {
     throw new QueryError("query.zodMode", 'toZod(): mode must be "row", "insert" or "update".');
   }
-  const pick = options?.pick;
-  const omit = options?.omit;
+  const pick = own(options, "pick");
+  const omit = own(options, "omit");
   if (pick === undefined && omit === undefined) {
     return cached(schema, mode) as unknown as z.ZodObject<ToZodShape<S, M, Exclude<P & ToZodKeys<S, M>, O>>>;
   }

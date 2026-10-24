@@ -15,6 +15,7 @@
 import type { ChangesetError } from "../../contracts/changeset.js";
 import type { AnySchema, FieldMeta } from "../../contracts/schema.js";
 import { QueryError } from "../../errors.js";
+import { frozenOptions, own } from "../../internal/own.js";
 import { isRow } from "../../schema/guards.js";
 import { meta } from "../../schema/schema.js";
 import { Changeset, change, rebuild, withAction } from "../changeset.js";
@@ -35,6 +36,8 @@ import {
 
 const hasOwn = Object.hasOwn;
 const EMPTY: Values = /* @__PURE__ */ Object.freeze({});
+/** The options of a cast without any: no prototype, so a key planted on `Object.prototype` is no option. */
+const NO_OPTIONS: NestedOptions = /* @__PURE__ */ frozenOptions({});
 
 const BLANK: ChangesetError = /* @__PURE__ */ Object.freeze({
   message: "can't be blank",
@@ -58,6 +61,12 @@ type WithFn = (target: unknown, item: Values, index: number) => unknown;
 // Options
 // ---------------------------------------------------------------------------
 
+/** The options of `castAssoc` and `castEmbed` as given, before they are checked. */
+interface NestedOptions {
+  readonly with?: unknown;
+  readonly required?: unknown;
+}
+
 interface CastSettings {
   readonly with: WithFn;
   readonly required: boolean;
@@ -76,29 +85,31 @@ function castSettings(relation: Relation, options: unknown, fn: string): CastSet
       `${fn}("${relation.name}", options): the options must be an object.`,
     );
   }
-  const given = (options ?? EMPTY) as { readonly with?: unknown; readonly required?: unknown };
+  const given = (options ?? NO_OPTIONS) as NestedOptions;
   for (const key of Object.keys(given)) {
     if (key !== "with" && key !== "required") {
       throw new QueryError("query.nestedUnknownOption", `${fn}(): unknown option "${key}".`);
     }
   }
-  if (given.required !== undefined && typeof given.required !== "boolean") {
+  const required = own(given, "required");
+  const withOption = own(given, "with");
+  if (required !== undefined && typeof required !== "boolean") {
     throw new QueryError("query.nestedRequired", `${fn}(): required must be true or false.`);
   }
-  if (given.with !== undefined && typeof given.with !== "function") {
+  if (withOption !== undefined && typeof withOption !== "function") {
     throw new QueryError(
       "query.nestedWith",
       `${fn}(): with must be the function that makes a child changeset.`,
     );
   }
-  const withFn = (given.with as WithFn | undefined) ?? defaultWith(relation.target);
+  const withFn = (withOption as WithFn | undefined) ?? defaultWith(relation.target);
   if (withFn === undefined) {
     throw new QueryError(
       "query.nestedNoChangeset",
       `${fn}("${relation.name}"): ${relation.targetMeta.name} has no static changeset function.`,
     );
   }
-  return { with: withFn, required: given.required === true };
+  return { with: withFn, required: required === true };
 }
 
 // ---------------------------------------------------------------------------

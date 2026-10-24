@@ -4,6 +4,7 @@
  * @module
  */
 import type pg from "pg";
+import { own } from "./own.js";
 
 /**
  * Pool settings for the pool the adapter creates.
@@ -160,9 +161,9 @@ export function resolveOptions(options: PostgresOptions | undefined): PoolSource
   if (!isPlainObject(options)) fail("options must be a plain object.");
   checkUnknown(options, OPTION_KEYS, "");
 
-  const pool: unknown = options.pool;
+  const pool: unknown = own(options, "pool");
   if (isPool(pool)) {
-    const given = CONNECTION_KEYS.filter((key) => options[key] !== undefined);
+    const given = CONNECTION_KEYS.filter((key) => own(options, key) !== undefined);
     if (given.length > 0) {
       fail(
         `${given.join(", ")} cannot be combined with an existing pool: they configure the connections the adapter opens, and a pool you pass in opens its own. Configure them on your pool instead.`,
@@ -172,33 +173,38 @@ export function resolveOptions(options: PostgresOptions | undefined): PoolSource
   }
 
   const config: pg.PoolConfig = { max: 10 };
-  const connectionString = optionalString(options.connectionString, "connectionString");
+  const connectionString = optionalString(own(options, "connectionString"), "connectionString");
   if (connectionString !== undefined) config.connectionString = connectionString;
-  const host = optionalString(options.host, "host");
+  const host = optionalString(own(options, "host"), "host");
   if (host !== undefined) config.host = host;
-  const port = optionalCount(options.port, "port", 1, 65_535);
+  const port = optionalCount(own(options, "port"), "port", 1, 65_535);
   if (port !== undefined) config.port = port;
-  const user = optionalString(options.user, "user");
+  const user = optionalString(own(options, "user"), "user");
   if (user !== undefined) config.user = user;
-  const password: unknown = options.password;
+  const password: unknown = own(options, "password");
   if (password !== undefined) {
     if (typeof password !== "string" && typeof password !== "function") {
       fail("password must be a string or a function that returns one.");
     }
     config.password = password as string | (() => string | Promise<string>);
   }
-  const database = optionalString(options.database, "database");
+  const database = optionalString(own(options, "database"), "database");
   if (database !== undefined) config.database = database;
-  const ssl: unknown = options.ssl;
+  const ssl: unknown = own(options, "ssl");
   if (ssl !== undefined) {
     if (typeof ssl !== "boolean" && (typeof ssl !== "object" || ssl === null)) {
       fail("ssl must be a boolean or an object of TLS options.");
     }
     config.ssl = ssl as pg.ConnectionConfig["ssl"] & object;
   }
-  const statementTimeoutMs = optionalCount(options.statementTimeoutMs, "statementTimeoutMs", 0, MAX_MS);
+  const statementTimeoutMs = optionalCount(
+    own(options, "statementTimeoutMs"),
+    "statementTimeoutMs",
+    0,
+    MAX_MS,
+  );
   if (statementTimeoutMs !== undefined) config.statement_timeout = statementTimeoutMs;
-  const applicationName = optionalString(options.applicationName, "applicationName");
+  const applicationName = optionalString(own(options, "applicationName"), "applicationName");
   if (applicationName !== undefined) config.application_name = applicationName;
 
   if (pool !== undefined) {
@@ -206,11 +212,11 @@ export function resolveOptions(options: PostgresOptions | undefined): PoolSource
       fail("pool must be pool settings ({ max, idleTimeoutMs, connectionTimeoutMs }) or a pg.Pool.");
     }
     checkUnknown(pool, POOL_KEYS, " in pool");
-    const max = optionalCount(pool.max, "pool.max", 1, 100_000);
+    const max = optionalCount(own(pool, "max"), "pool.max", 1, 100_000);
     if (max !== undefined) config.max = max;
-    const idle = optionalCount(pool.idleTimeoutMs, "pool.idleTimeoutMs", 0, MAX_MS);
+    const idle = optionalCount(own(pool, "idleTimeoutMs"), "pool.idleTimeoutMs", 0, MAX_MS);
     if (idle !== undefined) config.idleTimeoutMillis = idle;
-    const connect = optionalCount(pool.connectionTimeoutMs, "pool.connectionTimeoutMs", 0, MAX_MS);
+    const connect = optionalCount(own(pool, "connectionTimeoutMs"), "pool.connectionTimeoutMs", 0, MAX_MS);
     if (connect !== undefined) config.connectionTimeoutMillis = connect;
   }
   return { owned: true, config };

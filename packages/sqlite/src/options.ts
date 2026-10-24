@@ -4,6 +4,8 @@
  * @module
  */
 
+import { own } from "./own.js";
+
 /**
  * A pragma's value: a word or number, or a boolean (written `ON` / `OFF`).
  *
@@ -110,13 +112,13 @@ export function resolveOptions(options: SqliteOptions | undefined): OpenSettings
       fail(`unknown option ${JSON.stringify(key)}. The options are: ${[...OPTION_KEYS].join(", ")}.`);
     }
   }
-  const filename: unknown = options.filename;
+  const filename: unknown = own(options, "filename");
   if (typeof filename !== "string" || filename === "" || filename.includes("\u0000")) {
     fail('filename must be a non-empty string: a file name, or ":memory:".');
   }
-  const readonly: unknown = options.readonly;
+  const readonly: unknown = own(options, "readonly");
   if (readonly !== undefined && typeof readonly !== "boolean") fail("readonly must be a boolean.");
-  const given: unknown = options.pragmas;
+  const given: unknown = own(options, "pragmas");
   if (given !== undefined && !isPlainObject(given)) {
     fail('pragmas must be an object of pragma names and values, such as { journal_mode: "WAL" }.');
   }
@@ -128,7 +130,7 @@ export function resolveOptions(options: SqliteOptions | undefined): OpenSettings
   if (!entries.some(([name]) => name.toLowerCase() === "foreign_keys"))
     pragmas.push("pragma foreign_keys = ON");
   for (const [name, value] of entries) pragmas.push(pragmaStatement(name, value));
-  return { filename, readonly: readonly === true, pragmas, attach: attachments(options.attach) };
+  return { filename, readonly: readonly === true, pragmas, attach: attachments(own(options, "attach")) };
 }
 
 /** The `attach` option, checked: plain schema names, non-empty file names. */

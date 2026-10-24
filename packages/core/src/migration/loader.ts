@@ -6,6 +6,7 @@
  * @module
  */
 import { isEgonError, MigrationError, shortMessageOf } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isMigration, type Migration, missingSteps, missingStepsError } from "./define.js";
 
 /**
@@ -109,7 +110,13 @@ export function migrationList(list: readonly unknown[]): readonly MigrationSourc
     throw new TypeError("migrations must be an array of { version, name, migration }.");
   const sources: MigrationSource[] = [];
   for (const entry of list) {
-    const { version, name, migration } = (entry ?? {}) as Partial<Record<keyof MigrationSource, unknown>>;
+    // An entry is read like options: own properties only.
+    const given = (typeof entry === "object" && entry !== null ? entry : undefined) as
+      | Partial<Record<keyof MigrationSource, unknown>>
+      | undefined;
+    const version = own(given, "version");
+    const name = own(given, "name");
+    const migration = own(given, "migration");
     checkVersion("migrations[]", version);
     if (typeof name !== "string" || !NAME.test(name)) {
       throw new TypeError("migrations[]: a name is letters, digits and underscores.");
@@ -134,7 +141,7 @@ function checkSteps(
 ): void {
   const missing = missingSteps(migration);
   if (missing.length > 0) {
-    throw missingStepsError(subject, missing, "change" in migration, details);
+    throw missingStepsError(subject, missing, Object.hasOwn(migration, "change"), details);
   }
 }
 

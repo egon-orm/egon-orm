@@ -6,6 +6,7 @@
 import type { AnyFieldType, CastResult, DbType, FieldType } from "../contracts/type.js";
 import { CUSTOM_SQL_TYPE, IDENTITY } from "../contracts/type.js";
 import { SchemaDefinitionError } from "../errors.js";
+import { own } from "../internal/own.js";
 
 /**
  * The conversions of a {@link TypeDefinition}. They may be left out only when the
@@ -73,7 +74,7 @@ const SIMPLE_KINDS: ReadonlySet<string> = /* @__PURE__ */ new Set([
 function checkedDbType(typeName: string, db: unknown, path: string): DbType {
   // Each property is read once: what is checked is what is kept, even if the caller's
   // object answers differently the next time it is asked.
-  const kind: unknown = typeof db === "object" && db !== null ? (db as { kind?: unknown }).kind : undefined;
+  const kind: unknown = typeof db === "object" ? own(db as { kind?: unknown } | null, "kind") : undefined;
   if (typeof kind !== "string") {
     throw new SchemaDefinitionError(
       "schema.typeDbKind",
@@ -81,12 +82,12 @@ function checkedDbType(typeName: string, db: unknown, path: string): DbType {
     );
   }
   if (kind === "array") {
-    const of = checkedDbType(typeName, (db as { of?: unknown }).of, `${path}.of`);
+    const of = checkedDbType(typeName, own(db as { of?: unknown }, "of"), `${path}.of`);
     return Object.freeze({ kind, of });
   }
   if (kind === "custom") {
     // Trusted developer input (decision D9). The compiler checks it again before emitting it.
-    const sql: unknown = (db as { sql?: unknown }).sql;
+    const sql: unknown = own(db as { sql?: unknown }, "sql");
     if (typeof sql !== "string" || !CUSTOM_SQL_TYPE.test(sql)) {
       throw new SchemaDefinitionError(
         "schema.typeCustomSql",
@@ -132,11 +133,17 @@ function checkedDbType(typeName: string, db: unknown, path: string): DbType {
  * not a plain SQL type name.
  */
 export function defineType<TApp, TDb = TApp>(definition: TypeDefinition<TApp, TDb>): FieldType<TApp, TDb> {
-  const { name, db, cast, equal } = definition;
-  const { fromDb, toDb } = definition as {
+  // Own properties only: a key planted on Object.prototype is not part of the definition.
+  const name = own(definition, "name");
+  const db = own(definition, "db");
+  const cast = own(definition, "cast");
+  const equal = own(definition, "equal");
+  const conversions = definition as {
     readonly fromDb?: (value: TDb) => TApp;
     readonly toDb?: (value: TApp) => TDb;
   };
+  const fromDb = own(conversions, "fromDb");
+  const toDb = own(conversions, "toDb");
   if (typeof name !== "string" || name === "") {
     throw new SchemaDefinitionError(
       "schema.typeName",

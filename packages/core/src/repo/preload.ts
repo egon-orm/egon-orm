@@ -55,6 +55,7 @@ import type {
 import type { AnySchema, FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { ROW } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
+import { own, setOwn } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { type AssocRoute, checkRows, KeyIndex, rebuild, routeOf, schemaOfRow } from "../query/assoc.js";
 import {
@@ -164,7 +165,7 @@ interface Run {
  * ```
  */
 export function deadlineOf(options: ReadOptions | undefined): number | undefined {
-  const timeoutMs = options?.timeoutMs;
+  const timeoutMs = own(options, "timeoutMs");
   return typeof timeoutMs === "number" ? now() + timeoutMs : undefined;
 }
 
@@ -187,7 +188,7 @@ export function withinBudget(
 }
 
 function concurrencyOf(core: ReadCore, options: ReadOptions | undefined): number {
-  const given = options?.maxConcurrency;
+  const given = own(options, "maxConcurrency");
   if (given === undefined) return 1;
   if (typeof given !== "number" || !Number.isInteger(given) || given < 1) {
     throw new TypeError(
@@ -309,10 +310,10 @@ async function execute(
   const hub = core.hub;
   await turn(run);
   let result: RawResult;
-  const call = hub.listening ? new Call(hub, "preload", source, run.options?.context) : undefined;
+  const call = hub.listening ? new Call(hub, "preload", source, own(run.options, "context")) : undefined;
   try {
     const shaped: CallOptions = {
-      signal: run.options?.signal,
+      signal: own(run.options, "signal"),
       timeoutMs: run.deadline === undefined ? undefined : Math.max(0, run.deadline - now()),
       slots: plan.slots,
       context: call,
@@ -378,7 +379,7 @@ export async function runPreloads(
     context.named,
     context.options,
     context.deadline,
-    context.ast.schema ?? context.options?.schema ?? core.schema,
+    context.ast.schema ?? own(context.options, "schema") ?? core.schema,
   );
   const merged = hasJoin(nodes) ? dedupe(rows as object[], leaf.meta, nodes, true) : (rows as object[]);
   await loadNodes(run, merged, leaf.meta, nodes);
@@ -508,7 +509,7 @@ export async function preloadRows(
   const single = !Array.isArray(input);
   const rows = checkRows("repo.preload()", schema, single ? [input] : (input as readonly unknown[]));
   const run = newRun(core, named, options, deadlineOf(options), core.schema);
-  const out = await preloadInto(run, rows, meta(schema), nodes, options?.force === true);
+  const out = await preloadInto(run, rows, meta(schema), nodes, own(options, "force") === true);
   return single ? out[0] : out;
 }
 
@@ -593,7 +594,7 @@ export async function reloadPreloads(
         group.record?.named,
         options,
         deadline,
-        options?.schema ?? group.record?.schema ?? core.schema,
+        own(options, "schema") ?? group.record?.schema ?? core.schema,
       );
       const rebuilt = await preloadInto(
         run,
@@ -1422,7 +1423,9 @@ export function copyValue(value: unknown): unknown {
   if (isRow(value)) return copyRow(value);
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value)) out[key] = copyValue((value as Record<string, unknown>)[key]);
+    // A `__proto__` key of JSON data stays a key: a plain assignment would set the prototype.
+    for (const key of Object.keys(value))
+      setOwn(out, key, copyValue((value as Record<string, unknown>)[key]));
     return out;
   }
   return value;

@@ -39,6 +39,7 @@ import {
   type SchemaMeta,
 } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { t } from "../schema/field.js";
 import { meta, Schema } from "../schema/schema.js";
 import type { ReadOptions } from "./options.js";
@@ -141,8 +142,10 @@ class Run {
     const out: { -readonly [K in keyof ReadOptions]: ReadOptions[K] } = {};
     const timeoutMs = remaining(given, this.deadline);
     if (timeoutMs !== undefined) out.timeoutMs = timeoutMs;
-    if (given?.signal !== undefined) out.signal = given.signal;
-    if (given?.context !== undefined) out.context = given.context;
+    const signal = own(given, "signal");
+    const context = own(given, "context");
+    if (signal !== undefined) out.signal = signal;
+    if (context !== undefined) out.context = context;
     if (schema !== undefined) out.schema = schema;
     return out;
   }
@@ -150,7 +153,7 @@ class Run {
   /** The settings of the parent's own write, with what is left of the budget. */
   parentSettings(): WriteSettings {
     const given = this.settings.options;
-    if (given?.timeoutMs === undefined) return this.settings;
+    if (own(given, "timeoutMs") === undefined) return this.settings;
     return { ...this.settings, options: { ...given, timeoutMs: remaining(given, this.deadline) } };
   }
 
@@ -188,14 +191,15 @@ class Run {
     // Where children are inserted: their class's own schema, else the parent's.
     const parentSchema =
       before === null
-        ? (this.settings.options?.schema ?? schemaMeta.schema ?? core.schema)
-        : (this.settings.options?.schema ?? (before as unknown as { readonly [ROW]: RowMeta })[ROW].schema);
+        ? (own(this.settings.options, "schema") ?? schemaMeta.schema ?? core.schema)
+        : (own(this.settings.options, "schema") ??
+          (before as unknown as { readonly [ROW]: RowMeta })[ROW].schema);
     const childSchema = (target: SchemaMeta): string | undefined =>
       target.schema !== undefined
         ? undefined
         : schemaMeta.schema === undefined
           ? parentSchema
-          : this.settings.options?.schema;
+          : own(this.settings.options, "schema");
     const written = new Map<string, unknown>();
 
     // 1. belongsTo targets.
@@ -220,22 +224,22 @@ class Run {
     }
 
     // 2. The parent row.
-    const own =
+    const result =
       before === null
         ? await insertRow(core, schemaMeta, parent, this.parentSettings())
         : await updateRow(core, schemaMeta, before, parent, this.parentSettings(), method);
-    if (!own.success) {
+    if (!result.success) {
       // The parent's own changes as its write left them (embed children marked can't be
       // blank, say), with the association changes it was written without.
       return failure(
         rebuild(withAction(changeset, action), {
-          changes: { ...changes, ...(own.error.changes as Values) },
-          errors: own.error.errors,
+          changes: { ...changes, ...(result.error.changes as Values) },
+          errors: result.error.errors,
           valid: false,
         }),
       );
     }
-    const row = own.data as Record<string, unknown>;
+    const row = result.data as Record<string, unknown>;
 
     // A belongsTo target that was replaced, deleted when onReplace says so.
     for (const [relation, value] of nested) {

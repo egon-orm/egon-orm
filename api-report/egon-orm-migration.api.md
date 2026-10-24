@@ -1239,6 +1239,7 @@ const messages: {
     "query.aggregateUnknown": string;
     "query.aggregateUnknownColumn": string;
     "query.aliasMissing": string;
+    "query.aliasProto": string;
     "query.aliasReserved": string;
     "query.aliasTaken": string;
     "query.applyActionUnknown": string;
@@ -1281,6 +1282,7 @@ const messages: {
     "query.astTupleEmpty": string;
     "query.astUnaryOperator": string;
     "query.astWindowName": string;
+    "query.batchStepName": string;
     "query.batchStepTwice": string;
     "query.booleanArguments": string;
     "query.booleanExpected": string;
@@ -1499,6 +1501,7 @@ const messages: {
     "query.overName": string;
     "query.overTwice": string;
     "query.paramArguments": string;
+    "query.paramName": string;
     "query.paramNotWholeNumber": string;
     "query.paramsMissing": string;
     "query.paramsUnknown": string;

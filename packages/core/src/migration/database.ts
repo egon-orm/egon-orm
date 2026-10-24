@@ -8,6 +8,7 @@ import { sqlDialectOf } from "../adapter/compiler.js";
 import { quoteIdentifier } from "../compiler/dialect.js";
 import type { Adapter } from "../contracts/adapter.js";
 import { MigrationError } from "../errors.js";
+import { own } from "../internal/own.js";
 
 function quotedDatabase(where: string, adapter: Adapter, name: unknown): string {
   if (typeof name !== "string" || name.length === 0 || name.includes("\u0000")) {
@@ -63,7 +64,7 @@ export async function dropDatabase(
   name: string,
   options?: { readonly ifExists?: boolean },
 ): Promise<void> {
-  const ifExists = options?.ifExists;
+  const ifExists = own(options, "ifExists");
   if (ifExists !== undefined && typeof ifExists !== "boolean") {
     throw new TypeError("dropDatabase(): ifExists must be a boolean.");
   }

@@ -12,6 +12,7 @@ import type { Action, ChangesetError, ValidatorContext, ValidatorFn } from "../.
 import type { FieldMeta } from "../../contracts/schema.js";
 import type { StandardSchemaV1Props } from "../../contracts/standard-schema.js";
 import { QueryError } from "../../errors.js";
+import { own } from "../../internal/own.js";
 import { addValidation, Changeset, fieldsOf, rebuild, valueBefore } from "../changeset.js";
 import { nestedValid } from "../nested/change.js";
 import { isNestedValue } from "../nested/embed.js";
@@ -185,7 +186,9 @@ function optionsOf(
   if (typeof options !== "object" || options === null) {
     throw new QueryError("query.validateOptions", `${fn}(): the options must be an object.`);
   }
-  const { scope, apply, only } = options;
+  const scope = own(options, "scope");
+  const apply = own(options, "apply");
+  const only = own(options, "only");
   if (scope !== undefined && scope !== "all" && scope !== "changed") {
     throw new QueryError("query.validateScope", `${fn}(): scope must be "all" or "changed".`);
   }
@@ -656,10 +659,11 @@ function applyOutput<C extends AnyChangeset>(
       if (!result.success) {
         // Not written either way; a field that already has an error gets no second one.
         if (hasOwn(changeset.errors, key)) continue;
+        const failureMeta = own(result, "meta");
         const meta =
-          result.meta === undefined ? { type: field.type.name } : { type: field.type.name, ...result.meta };
+          failureMeta === undefined ? { type: field.type.name } : { type: field.type.name, ...failureMeta };
         rejected ??= new Map();
-        collect(rejected, key, { message: result.message ?? "is invalid", validation: "cast", meta });
+        collect(rejected, key, { message: own(result, "message") ?? "is invalid", validation: "cast", meta });
         continue;
       }
       converted = result.data;

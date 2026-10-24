@@ -20,6 +20,7 @@ import type {
 import { META } from "../contracts/schema.js";
 import type { AnyFieldType, FieldType } from "../contracts/type.js";
 import { SchemaDefinitionError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { embedType } from "../types/embed.js";
 import type { DecimalOptions, EnumMapping, TimestampOptions } from "../types/index.js";
 import {
@@ -188,7 +189,7 @@ class Builder<T, F extends FieldFlags> implements FieldBuilder<T, F> {
         `virtual() has no option "${unknownKey}". It takes json.`,
       );
     }
-    const json: unknown = given === undefined ? undefined : (given as { readonly json?: unknown }).json;
+    const json: unknown = own(given as { readonly json?: unknown } | undefined, "json");
     if (json !== undefined && typeof json !== "boolean") {
       throw new SchemaDefinitionError("schema.virtualJsonOption", "virtual(): json must be true or false.");
     }
@@ -335,7 +336,7 @@ function embed(
       `t.${factory}() takes a function that returns the embedded schema class.`,
     );
   }
-  const onReplace = options?.onReplace ?? "error";
+  const onReplace = own(options, "onReplace") ?? "error";
   const allowed = factory === "embedOne" ? EMBED_ONE_ON_REPLACE : EMBED_MANY_ON_REPLACE;
   if (!allowed.has(onReplace)) {
     throw new SchemaDefinitionError(
@@ -439,14 +440,14 @@ export const t: FieldTypes = /* @__PURE__ */ Object.freeze({
   string: () => builder(stringType()),
   integer: () => builder(integerType()),
   bigint: (options?: { readonly mode?: "bigint" | "number" }) =>
-    builder(options?.mode === "number" ? bigintType({ mode: "number" }) : bigintType()),
+    builder(own(options, "mode") === "number" ? bigintType({ mode: "number" }) : bigintType()),
   float: () => builder(floatType()),
   decimal: (options?: DecimalOptions) => builder(decimalType(options)),
   boolean: () => builder(booleanType()),
   uuid: () => builder(uuidType()),
   binary: () => builder(binaryType()),
   date: (options?: { readonly as?: "string" | "date" }) =>
-    builder(options?.as === "date" ? dateType({ as: "date" }) : dateType()),
+    builder(own(options, "as") === "date" ? dateType({ as: "date" }) : dateType()),
   time: () => builder(timeType()),
   timestamp: (options?: TimestampOptions) => builder(timestampType(options)),
   localTimestamp: (options?: TimestampOptions) => builder(localTimestampType(options)),
@@ -538,9 +539,9 @@ export type TimestampFields<C extends string | false, U extends string | false> 
 export function timestamps<
   const C extends string | false = "createdAt",
   const U extends string | false = "updatedAt",
->(options: TimestampsOptions<C, U> = {}): TimestampFields<C, U> {
-  const createdAt: unknown = options.createdAt ?? "createdAt";
-  const updatedAt: unknown = options.updatedAt ?? "updatedAt";
+>(options?: TimestampsOptions<C, U>): TimestampFields<C, U> {
+  const createdAt: unknown = own(options, "createdAt") ?? "createdAt";
+  const updatedAt: unknown = own(options, "updatedAt") ?? "updatedAt";
   for (const [option, name] of [
     ["createdAt", createdAt],
     ["updatedAt", updatedAt],
@@ -558,7 +559,8 @@ export function timestamps<
       `timestamps(): createdAt and updatedAt are both named "${String(createdAt)}".`,
     );
   }
-  const state = options.type === undefined ? pristine(timestampType()) : fieldState(options.type);
+  const type = own(options, "type");
+  const state = type === undefined ? pristine(timestampType()) : fieldState(type);
   const now = state !== undefined && isPristine(state) ? currentTime(state.type) : undefined;
   if (state === undefined || now === undefined) {
     throw new SchemaDefinitionError(

@@ -7,6 +7,7 @@
  */
 import type { FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { META, ROW } from "../contracts/schema.js";
+import { setOwn } from "./own.js";
 
 /**
  * What stands in for the value of a redacted field.
@@ -18,19 +19,6 @@ import { META, ROW } from "../contracts/schema.js";
  * ```
  */
 export const REDACTED = "**redacted**";
-
-/**
- * Assigns an own property. A plain `out[key] = value` is wrong for the key `"__proto__"`
- * (which `JSON.parse` produces as an ordinary own key): it would set the copy's prototype
- * instead, dropping the key and making the value's properties appear inherited.
- */
-function setOwn(out: Record<string, unknown>, key: string, value: unknown): void {
-  if (key === "__proto__") {
-    Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
-  } else {
-    out[key] = value;
-  }
-}
 
 /**
  * Copies the own enumerable string-keyed properties of `values`, replacing the value of

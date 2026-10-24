@@ -23,6 +23,7 @@ import type {
   ValidPreload,
 } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import type { ColumnNames, SchemaOfBinding } from "../query/bindings.js";
 import type {
   PreloadCheck,
@@ -1254,8 +1255,9 @@ class DatabaseRepo implements Repo {
         `repo.preload(): it takes its options last, but it was given ${args.length} arguments after the spec.`,
       );
     }
-    if (options?.force !== undefined && typeof options.force !== "boolean") {
-      throw new TypeError(`repo.preload(): force must be true or false, but it is ${typeof options.force}.`);
+    const force = own(options, "force");
+    if (force !== undefined && typeof force !== "boolean") {
+      throw new TypeError(`repo.preload(): force must be true or false, but it is ${typeof force}.`);
     }
     return preloadRows(this.#core, checked, rows, nodes, undefined, options);
   }

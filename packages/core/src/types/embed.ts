@@ -16,6 +16,7 @@ import type { AnyFieldType, CastResult, DbType, FieldType } from "../contracts/t
 import { IDENTITY } from "../contracts/type.js";
 import { CastError } from "../errors.js";
 import { deepEqual } from "../internal/deep-equal.js";
+import { setOwn } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { meta } from "../schema/schema.js";
 import { detached } from "./define.js";
@@ -173,7 +174,8 @@ function jsonOf(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(jsonOf);
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value)) out[key] = jsonOf((value as Record<string, unknown>)[key]);
+    // A `__proto__` key of JSON data stays a key: a plain assignment would set the prototype.
+    for (const key of Object.keys(value)) setOwn(out, key, jsonOf((value as Record<string, unknown>)[key]));
     return out;
   }
   return value;
@@ -380,7 +382,8 @@ function rowFrom(schema: AnySchema, schemaMeta: SchemaMeta, input: unknown): obj
   }
   const values: unknown[] = [];
   for (const field of schemaMeta.persisted) {
-    let value = given[field.name];
+    // Own properties only: a value planted on Object.prototype is not input.
+    let value = hasOwn(given, field.name) ? given[field.name] : undefined;
     if (value === undefined) {
       value = missingValue(field);
       if (value === undefined && field.autogenerate !== undefined) value = field.autogenerate.fn();

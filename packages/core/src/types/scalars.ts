@@ -9,6 +9,7 @@
 import type { CastResult, FieldType } from "../contracts/type.js";
 import { IDENTITY } from "../contracts/type.js";
 import { CastError, SchemaDefinitionError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { defineType, parameterized } from "./define.js";
 
 /**
@@ -211,7 +212,7 @@ export function bigintType(options: { readonly mode: "number" }): FieldType<numb
 export function bigintType(
   options?: BigintOptions,
 ): FieldType<bigint, bigint> | FieldType<number, number | bigint | string> {
-  const mode = options?.mode ?? "bigint";
+  const mode = own(options, "mode") ?? "bigint";
   if (mode === "bigint") return BIGINT;
   if (mode === "number") return BIGINT_AS_NUMBER;
   throw new SchemaDefinitionError(
@@ -414,8 +415,9 @@ const decimalWith = /* @__PURE__ */ parameterized(
  */
 export function decimalType(options?: DecimalOptions): FieldType<string, string> {
   if (options === undefined) return DECIMAL;
-  const { precision, scale = 0 } = options;
-  if (!Number.isInteger(precision) || precision < 1 || precision > 1000) {
+  const precision = own(options, "precision");
+  const scale = own(options, "scale") ?? 0;
+  if (precision === undefined || !Number.isInteger(precision) || precision < 1 || precision > 1000) {
     throw new SchemaDefinitionError(
       "schema.decimalPrecision",
       `t.decimal: precision must be a whole number from 1 to 1000, but got ${String(precision)}.`,

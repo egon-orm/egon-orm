@@ -11,6 +11,7 @@ import pg from "pg";
 import type Cursor from "pg-cursor";
 import { type CancelTarget, sendCancelRequest } from "./cancel.js";
 import type { PoolSource } from "./options.js";
+import { own } from "./own.js";
 import { PG_TYPES } from "./values.js";
 
 /** The driver interface of the shared adapter (not exported by name from `egon-orm`). */
@@ -286,9 +287,10 @@ export class PgDriver implements DriverWrapper {
 
   private cancelTimeoutMs(): number {
     const source = this.source;
+    // Own properties only: a value planted on Object.prototype is no timeout.
     const configured: unknown = source.owned
-      ? source.config.connectionTimeoutMillis
-      : source.pool.options?.connectionTimeoutMillis;
+      ? own(source.config, "connectionTimeoutMillis")
+      : own(source.pool.options, "connectionTimeoutMillis");
     return typeof configured === "number" && configured > 0 ? configured : DEFAULT_CANCEL_TIMEOUT_MS;
   }
 

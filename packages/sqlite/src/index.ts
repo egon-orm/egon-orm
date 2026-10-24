@@ -9,6 +9,7 @@ import { quoteIdentifier, SQLITE_CAPABILITIES } from "./dialect.js";
 import { SqliteDriver } from "./driver.js";
 import { normalizeSqliteError } from "./errors.js";
 import { resolveOptions, type SqliteOptions } from "./options.js";
+import { own } from "./own.js";
 import { SQLITE_DRIVER_CODECS } from "./values.js";
 
 export type { PragmaValue, SqliteOptions } from "./options.js";
@@ -52,7 +53,7 @@ export const VERSION: string = "0.0.0";
  */
 export function sqlite(options: SqliteOptions): DatabaseAdapter {
   const settings = resolveOptions(options);
-  const planCacheSize = options.planCacheSize;
+  const planCacheSize = own(options, "planCacheSize");
   return createAdapter({
     dialect: "sqlite",
     capabilities: SQLITE_CAPABILITIES,

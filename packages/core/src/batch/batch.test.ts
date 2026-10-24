@@ -101,6 +101,19 @@ describe("building a batch", () => {
     expect(() => batch.inspect("user" as never, () => undefined)).toThrow(QueryError);
   });
 
+  test("a step named __proto__ is a QueryError when the batch is built", () => {
+    // Its result would replace the prototype of the results object.
+    expect(() => createBatch().put("__proto__", { polluted: true })).toThrow(
+      expect.objectContaining({ id: "query.batchStepName" }),
+    );
+    expect(() => createBatch().run("__proto__", () => success({}))).toThrow(QueryError);
+    expect(() => createBatch().inspect("__proto__", () => undefined)).toThrow(QueryError);
+    // Other names of Object.prototype's members are plain own keys of the results.
+    expect(Batch.toList(createBatch().put("constructor", 1)).map((step) => step.name)).toEqual([
+      "constructor",
+    ]);
+  });
+
   test("append and prepend join two batches, refusing a name that both have", () => {
     const first = createBatch().put("a", 1);
     const second = createBatch().put("b", 2);

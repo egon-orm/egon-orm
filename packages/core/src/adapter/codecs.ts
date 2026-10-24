@@ -14,6 +14,7 @@
  */
 import type { AnyFieldType, Codec, DbTypeKind } from "../contracts/type.js";
 import { IDENTITY } from "../contracts/type.js";
+import { own } from "../internal/own.js";
 import { elementTypeOf, mapElements } from "../types/composite.js";
 import { detached } from "../types/define.js";
 
@@ -76,14 +77,16 @@ export function typeOverridesFrom(fixes: DriverCodecs): (type: AnyFieldType) => 
   const scalar = (type: AnyFieldType): Codec | undefined => {
     const kind = type.db.kind;
     if (kind === "array" || kind === "custom") return undefined;
-    const fix = fixes[kind];
+    // The driver's table and its fixes are read as own keys: a key planted on
+    // Object.prototype is no fix.
+    const fix = own(fixes, kind);
     if (fix === undefined) return undefined;
     return Object.freeze({
-      fromDb: composeFromDb(fix.fromDb, detached(type, "fromDb") as (value: unknown) => unknown),
-      toDb: composeToDb(fix.toDb, detached(type, "toDb") as (value: unknown) => unknown),
+      fromDb: composeFromDb(own(fix, "fromDb"), detached(type, "fromDb") as (value: unknown) => unknown),
+      toDb: composeToDb(own(fix, "toDb"), detached(type, "toDb") as (value: unknown) => unknown),
     });
   };
-  const arrayFix = fixes.array;
+  const arrayFix = own(fixes, "array");
   if (arrayFix === undefined) return scalar;
   /**
    * The conversions of one element: its own fix composed with its type's, nested arrays
@@ -110,8 +113,8 @@ export function typeOverridesFrom(fixes: DriverCodecs): (type: AnyFieldType) => 
     // driver, then the array is (`toDb`); the other way round when it is read.
     const codec = element(type);
     return Object.freeze({
-      fromDb: composeFromDb(arrayFix.fromDb, codec.fromDb as (value: unknown) => unknown),
-      toDb: composeToDb(arrayFix.toDb, codec.toDb as (value: unknown) => unknown),
+      fromDb: composeFromDb(own(arrayFix, "fromDb"), codec.fromDb as (value: unknown) => unknown),
+      toDb: composeToDb(own(arrayFix, "toDb"), codec.toDb as (value: unknown) => unknown),
     });
   };
 }

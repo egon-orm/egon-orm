@@ -30,6 +30,7 @@ import type { QueryAst, QueryOperation } from "../contracts/query.js";
 import type { FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import type { AnyFieldType, Codec } from "../contracts/type.js";
 import { DatabaseError, isEgonError, QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import type { DriverCodecs } from "./codecs.js";
 import { type StatementCompiler, sharedStatementCompiler } from "./compiler.js";
@@ -164,7 +165,9 @@ function checkBegin(
   if (!isPlainObject(options)) {
     throw new TypeError("connection.begin(options): options must be a plain object or undefined.");
   }
-  const { isolation, readOnly, deferrable } = options;
+  const isolation = own(options, "isolation");
+  const readOnly = own(options, "readOnly");
+  const deferrable = own(options, "deferrable");
   if (isolation !== undefined) {
     if (!ISOLATION_SQL.has(isolation)) {
       throw new TypeError(
@@ -267,7 +270,7 @@ const NO_PARAMS: readonly unknown[] = /* @__PURE__ */ Object.freeze([]);
  * except `statementName`: a transaction statement is never prepared.
  */
 function checkTransactionOptions(method: string, options: ExecuteOptions | undefined): void {
-  if (options?.statementName !== undefined) {
+  if (own(options, "statementName") !== undefined) {
     throw new TypeError(
       `connection.${method}(…, options): statementName is not accepted here; transaction statements are never prepared.`,
     );
@@ -567,7 +570,7 @@ class SharedAdapter implements DatabaseAdapter {
   private closing: Promise<void> | undefined = undefined;
 
   constructor(definition: AdapterDefinition) {
-    const planCacheSize = definition.planCacheSize ?? DEFAULT_PLAN_CACHE_SIZE;
+    const planCacheSize = own(definition, "planCacheSize") ?? DEFAULT_PLAN_CACHE_SIZE;
     if (!Number.isSafeInteger(planCacheSize) || planCacheSize < 1) {
       throw new TypeError(
         `planCacheSize must be a positive whole number, but it is ${String(planCacheSize)}.`,
@@ -665,8 +668,8 @@ class SharedAdapter implements DatabaseAdapter {
   // --- execution ---------------------------------------------------------------------
 
   async execute(sql: string, params: readonly unknown[], options?: ExecuteOptions): Promise<RawResult> {
-    const signal = checkSignal(options?.signal);
-    const timeoutMs = checkTimeout(options?.timeoutMs);
+    const signal = checkSignal(own(options, "signal"));
+    const timeoutMs = checkTimeout(own(options, "timeoutMs"));
     const driver = this.open(sql);
     const timed = this.telemetry.query;
     const start = timed ? now() : 0;
@@ -679,7 +682,7 @@ class SharedAdapter implements DatabaseAdapter {
       const checkedOut = await this.checkout(driver, sql, signal, timeoutMs);
       connection = checkedOut;
       if (timed) sent = now();
-      const name = options?.statementName;
+      const name = own(options, "statementName");
       // The common case (no signal, no timeout) calls the driver directly: no closure, no timer.
       const pending =
         signal === undefined && timeoutMs === undefined
@@ -723,9 +726,9 @@ class SharedAdapter implements DatabaseAdapter {
     params: readonly unknown[],
     options: StreamOptions | undefined,
   ): AsyncGenerator<Record<string, unknown>, void, undefined> {
-    const signal = checkSignal(options?.signal);
-    const timeoutMs = checkTimeout(options?.timeoutMs);
-    const batchSize = checkBatchSize(options?.batchSize);
+    const signal = checkSignal(own(options, "signal"));
+    const timeoutMs = checkTimeout(own(options, "timeoutMs"));
+    const batchSize = checkBatchSize(own(options, "batchSize"));
     const driver = this.open(sql);
     const timed = this.telemetry.query;
     const start = timed ? now() : 0;
@@ -806,12 +809,12 @@ class SharedAdapter implements DatabaseAdapter {
     this.telemetry.emitQuery(
       sql,
       params,
-      options?.slots,
+      own(options, "slots"),
       durationMs,
       queueMs,
       rowCount,
       error,
-      options?.context,
+      own(options, "context"),
     );
   }
 
@@ -999,7 +1002,7 @@ class SharedConnection implements Connection {
     statements: readonly string[],
     execute: ExecuteOptions | undefined,
   ): Promise<void> {
-    const timeoutMs = checkTimeout(execute?.timeoutMs);
+    const timeoutMs = checkTimeout(own(execute, "timeoutMs"));
     const deadline = timeoutMs === undefined ? 0 : now() + timeoutMs;
     for (let i = 0; i < statements.length; i++) {
       const options =
@@ -1106,13 +1109,13 @@ class SharedConnection implements Connection {
     params: readonly unknown[],
     options: ExecuteOptions | undefined,
   ): Promise<RawResult> {
-    const signal = checkSignal(options?.signal);
-    const timeoutMs = checkTimeout(options?.timeoutMs);
+    const signal = checkSignal(own(options, "signal"));
+    const timeoutMs = checkTimeout(own(options, "timeoutMs"));
     this.usable(sql);
     const timed = this.adapter.queryTelemetry;
     const start = timed ? now() : 0;
     try {
-      const name = options?.statementName;
+      const name = own(options, "statementName");
       const connection = this.#connection;
       const pending =
         signal === undefined && timeoutMs === undefined
@@ -1134,9 +1137,9 @@ class SharedConnection implements Connection {
     params: readonly unknown[],
     options: StreamOptions | undefined,
   ): AsyncGenerator<Record<string, unknown>, void, undefined> {
-    const signal = checkSignal(options?.signal);
-    const timeoutMs = checkTimeout(options?.timeoutMs);
-    const batchSize = checkBatchSize(options?.batchSize);
+    const signal = checkSignal(own(options, "signal"));
+    const timeoutMs = checkTimeout(own(options, "timeoutMs"));
+    const batchSize = checkBatchSize(own(options, "batchSize"));
     this.usable(sql);
     const timed = this.adapter.queryTelemetry;
     const start = timed ? now() : 0;

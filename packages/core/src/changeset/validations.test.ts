@@ -39,6 +39,20 @@ describe("validateRequired", () => {
     expect(cs.valid).toBe(false);
   });
 
+  test("a name listed twice is checked once: one error", () => {
+    const cs = cast(User, { name: "" }, ["name"]).validateRequired(["email", "name", "email", "name"]);
+    expect(cs.errors).toEqual({
+      email: [{ message: "can't be blank", validation: "required", meta: {} }],
+      name: [{ message: "can't be blank", validation: "required", meta: {} }],
+    });
+    expect(cs.validations).toEqual([
+      ["email", { validation: "required" }],
+      ["name", { validation: "required" }],
+    ]);
+    const passing = change(hedy()).validateRequired(["email", "email"]);
+    expect(passing.validations).toEqual([["email", { validation: "required" }]]);
+  });
+
   test("checks the data too: a loaded row's values count", () => {
     expect(change(hedy()).validateRequired(["email", "name"]).valid).toBe(true);
     expect(change(hedy(), { name: null }).validateRequired(["name"]).valid).toBe(false);

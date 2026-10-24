@@ -52,7 +52,7 @@ Create a new adapter to keep using the database.
 
 ## `database.callTimeout` {#database-calltimeout}
 
-> The call ran longer than its timeoutMs (&#123;options?.timeoutMs&#125; ms), which covers every statement it runs.
+> The call ran longer than its timeoutMs (&#123;timeoutMs&#125; ms), which covers every statement it runs.
 
 Give the call a larger timeoutMs: it covers every statement the call runs.
 
@@ -138,7 +138,7 @@ Give the call a larger timeoutMs: the time is shared by every statement of a cal
 
 > The statement was not run: it waited longer than its timeoutMs (&#123;timeoutMs&#125; ms) for a free connection.
 
-> The &#123;what&#125; was not run: it waited longer than its timeoutMs (&#123;options?.timeoutMs&#125; ms) for a free connection.
+> The &#123;what&#125; was not run: it waited longer than its timeoutMs (&#123;timeoutMs&#125; ms) for a free connection.
 
 Nothing was sent to the database. Give the pool more connections, run fewer statements at once, or give the call a larger timeoutMs.
 

@@ -10,6 +10,7 @@ import type { AggregateNode, ExprNode, NamedParamNode, OrderNode } from "../cont
 import type { FieldBuilder, FieldFlags } from "../contracts/schema.js";
 import type { AnyFieldType } from "../contracts/type.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { fieldState } from "../schema/field.js";
 import {
   arrayType,
@@ -309,15 +310,17 @@ function windowOf(window: string | WindowSpec | undefined): AggregateNode["over"
     );
   }
   const partitionBy: ExprNode[] = [];
-  for (const item of window.partitionBy ?? NONE) partitionBy.push(expressionArgument(item, "over").node);
+  for (const item of own(window, "partitionBy") ?? NONE)
+    partitionBy.push(expressionArgument(item, "over").node);
   const orderBy: OrderNode[] = [];
-  for (const item of window.orderBy ?? NONE) {
+  for (const item of own(window, "orderBy") ?? NONE) {
     if (item instanceof OrderExpr) orderBy.push(item.node);
     else orderBy.push(orderNode(expressionArgument(item, "over").node, "asc", undefined));
   }
   let frame: ExprNode | undefined;
-  if (window.frame !== undefined) {
-    frame = expressionArgument(window.frame, "over").node;
+  const given = own(window, "frame");
+  if (given !== undefined) {
+    frame = expressionArgument(given, "over").node;
     if (frame.kind !== "fragment") {
       throw new QueryError("query.overFrame", "over(): frame is a fragment.");
     }
@@ -941,6 +944,10 @@ export function param<const N extends string, T, F extends FieldFlags>(
 ): Expr<T, { [K in N]: T }> {
   if (typeof name !== "string" || name === "") {
     throw new QueryError("query.paramArguments", "param() takes a name and a field type.");
+  }
+  // Values are passed as one object, keyed by name: this one would replace its prototype.
+  if (name === "__proto__") {
+    throw new QueryError("query.paramName", 'param(): a named parameter cannot be named "__proto__".');
   }
   const fieldType = typeArgument(type, "param");
   const node = namedParamNode(name, fieldType, false);

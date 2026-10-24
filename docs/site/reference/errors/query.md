@@ -64,6 +64,12 @@ Aggregate a stored field of the schema; a virtual field has no column.
 
 Give the binding an alias, a non-empty string: &#123;clause&#125;(User, "u").
 
+## `query.aliasProto` {#query-aliasproto}
+
+> &#123;clause&#125;(): a binding cannot be named "\_\_proto\_\_".
+
+Choose another alias: the bindings are passed to callbacks as one object keyed by alias.
+
 ## `query.aliasReserved` {#query-aliasreserved}
 
 > &#123;clause&#125;() was given the alias "&#123;alias&#125;".
@@ -317,6 +323,12 @@ The query tree is malformed: queries built with from() and the builder methods n
 > A window name is not an identifier, so it was not written.
 
 The query tree is malformed: windows() refuses such names when it is called, so this one was changed afterwards.
+
+## `query.batchStepName` {#query-batchstepname}
+
+> batch.&#123;method&#125;(): a step cannot be named "\_\_proto\_\_".
+
+Choose another name for the step: its result is kept under it.
 
 ## `query.batchStepTwice` {#query-batchsteptwice}
 
@@ -1625,6 +1637,12 @@ Call over() once per aggregate; declare the window with all its parts in that ca
 > param() takes a name and a field type.
 
 Pass a name and a field type, as in param("minAge", t.integer()).
+
+## `query.paramName` {#query-paramname}
+
+> param(): a named parameter cannot be named "\_\_proto\_\_".
+
+Choose another name: the values are passed as one object keyed by name.
 
 ## `query.paramNotWholeNumber` {#query-paramnotwholenumber}
 

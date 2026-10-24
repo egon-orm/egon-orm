@@ -6,6 +6,7 @@
  */
 import type { AdapterEvents, ParamSlot, QueryEvent } from "../contracts/adapter.js";
 import { REDACTED } from "../internal/inspect.js";
+import { own } from "../internal/own.js";
 
 /**
  * Options of a `query` listener.
@@ -149,7 +150,7 @@ export class Telemetry {
   private keyOf(event: keyof AdapterEvents, options: QueryListenerOptions | undefined): ListenerKey {
     switch (event) {
       case "query":
-        return options?.params === true ? "queryParams" : "query";
+        return own(options, "params") === true ? "queryParams" : "query";
       case "connect":
       case "disconnect":
       case "poolExhausted":

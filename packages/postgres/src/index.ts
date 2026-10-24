@@ -9,6 +9,7 @@ import { POSTGRES_CAPABILITIES, quoteIdentifier } from "./dialect.js";
 import { PgDriver } from "./driver.js";
 import { normalizePgError } from "./errors.js";
 import { type PostgresOptions, resolveOptions } from "./options.js";
+import { own } from "./own.js";
 import { PG_DRIVER_CODECS } from "./values.js";
 
 export type { PostgresOptions, PostgresPoolOptions } from "./options.js";
@@ -51,7 +52,7 @@ export const VERSION: string = "0.0.0";
  */
 export function postgres(options?: PostgresOptions): DatabaseAdapter {
   const source = resolveOptions(options);
-  const planCacheSize = options?.planCacheSize;
+  const planCacheSize = own(options, "planCacheSize");
   return createAdapter({
     dialect: "postgres",
     capabilities: POSTGRES_CAPABILITIES,
