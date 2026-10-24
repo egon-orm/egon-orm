@@ -2,7 +2,7 @@
 // Object.prototype is never taken as an option. See also
 // packages/core/test/security/hostile-params.test.ts.
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { SQLITE_RUNTIME } from "./driver.js";
+import { databaseOptions, SQLITE_RUNTIME } from "./driver.js";
 import { resolveOptions } from "./options.js";
 
 /** Removes what a test put on Object.prototype. */
@@ -40,6 +40,13 @@ describe("a key planted on Object.prototype is no option of sqlite()", () => {
       handle.close();
     }
     expect(verbose).not.toHaveBeenCalled();
+  });
+
+  test("the driver options have no prototype and no nativeBinding key, not even null", () => {
+    // better-sqlite3 13.x's per-platform entry points refuse 'nativeBinding' in options.
+    const options = databaseOptions(resolveOptions({ filename: ":memory:" }));
+    expect(Object.getPrototypeOf(options)).toBeNull();
+    expect("nativeBinding" in options).toBe(false);
   });
 
   test("a planted filename does not stand in for a missing one", () => {

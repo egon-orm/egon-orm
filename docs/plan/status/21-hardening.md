@@ -463,3 +463,6 @@ aim, that no inherited key reaches the driver, is met by the object having no pr
   `nativeBinding`; `readonly`, `fileMustExist`, `timeout` and `verbose` are accepted.
 - CHANGELOG and SECURITY.md: "its options on an object with no prototype, Egon's values
   set as own properties".
+- After round 3's approval: a test that the options have no prototype and that
+  `"nativeBinding" in` them is `false`, so a later `nativeBinding: null` cannot bring the
+  13.x error back. Checked to fail with `options.nativeBinding = null` added, then reverted.
