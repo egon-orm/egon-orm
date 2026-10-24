@@ -49,7 +49,7 @@ import type {
   ConfirmationOptions,
   ConstraintOptions,
   ErrorFormatter,
-  ErrorMessagesOf,
+  ErrorMessages,
   ErrorTree,
   ErrorTreeOf,
   FieldName,
@@ -1479,7 +1479,7 @@ export class Changeset<
    * including those of nested changesets. The tree is typed by the schema: its fields,
    * associations and embeds (nested trees), the keys validations added
    * (`passwordConfirmation`, carried in the changeset's type), and `$base`.
-   * Name its type with `ErrorMessagesOf`: of the changeset's type, or of what the schema's
+   * Name its type with `ErrorMessages`: of the changeset's type, or of what the schema's
    * `changeset` function returns.
    *
    * @example
@@ -1487,11 +1487,11 @@ export class Changeset<
    * cast(User, {}, ["email"]).validateRequired(["email"]).errorMessages(); // { email: ["can't be blank"] }
    *
    * // For a client: the errors of User.changeset, keys added by its validations included.
-   * type SignUpErrors = ErrorMessagesOf<ReturnType<typeof User.changeset>>;
+   * type SignUpErrors = ErrorMessages<ReturnType<typeof User.changeset>>;
    * ```
    */
-  errorMessages<C extends ChangesetLike>(this: C): ErrorMessagesOf<C> {
-    return traverseErrors(this as ChangesetLike, interpolate) as ErrorMessagesOf<C>;
+  errorMessages<C extends ChangesetLike>(this: C): ErrorMessages<C> {
+    return traverseErrors(this as ChangesetLike, interpolate) as ErrorMessages<C>;
   }
 
   // -------------------------------------------------------------------------

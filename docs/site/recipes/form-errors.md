@@ -17,7 +17,7 @@ Both parts below use these imports, the repo and the schema:
 `errorMessages()` returns a plain object, `{ field: ["message", …] }`, with validation
 errors and declared constraint violations in the same shape. It is serialisable, so it can
 be returned from a server action or an API as it is. It is typed by field:
-`ErrorMessagesOf<ReturnType<typeof User.changeset>>` names it for the client, so a misspelt
+`ErrorMessages<ReturnType<typeof User.changeset>>` names it for the client, so a misspelt
 field is a compile error there too. The values go back as well, so the form keeps what the
 user typed.
 

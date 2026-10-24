@@ -37,7 +37,7 @@ export type {
   ConfirmationOptions,
   ConstraintOptions,
   ErrorFormatter,
-  ErrorMessagesOf,
+  ErrorMessages,
   ErrorTree,
   ErrorTreeOf,
   FieldName,

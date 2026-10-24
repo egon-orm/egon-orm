@@ -183,7 +183,7 @@ For Zod and other schema validators, see [Validation](/guide/validation).
   They are collected along a chain of calls: for a changeset that is reassigned
   (`cs = cs.addError(…)`) or picked by a branch (`ok ? cs : cs.addError(…)`), declare the
   keys in its type, `Changeset<typeof User, true, "captcha">`.
-  Name the type with `ErrorMessagesOf<typeof cs>`, or `ErrorMessagesOf<ReturnType<typeof User.changeset>>`
+  Name the type with `ErrorMessages<typeof cs>`, or `ErrorMessages<ReturnType<typeof User.changeset>>`
   (`ReturnType<typeof cs.errorMessages>` gives the untyped tree).
 - `traverseErrors(cs, fn)` lets you format each error yourself (translation, plurals) and
   descends into [nested changesets](/guide/nested-changesets).

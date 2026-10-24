@@ -477,11 +477,11 @@ export type TypedErrorTree<S, E extends string, T> =
  *
  * @example
  * ```ts
- * type SignUpErrors = ErrorMessagesOf<ReturnType<typeof User.changeset>>; // { email?: string[]; passwordConfirmation?: string[]; … }
+ * type SignUpErrors = ErrorMessages<ReturnType<typeof User.changeset>>; // { email?: string[]; passwordConfirmation?: string[]; … }
  * const errors: SignUpErrors = { email: ["has already been taken"] };
  * ```
  */
-export type ErrorMessagesOf<C> = C extends AnySchema
+export type ErrorMessages<C> = C extends AnySchema
   ? TypedErrorTree<C, never, string>
   : ErrorTreeOf<C, string>;
 

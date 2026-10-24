@@ -7,7 +7,7 @@ import {
   cast,
   createRepo,
   DatabaseError,
-  type ErrorMessagesOf,
+  type ErrorMessages,
   from,
   InvalidChangesetError,
   type Json,
@@ -208,7 +208,7 @@ export const listArticles = () => db.all(from(Article, "a").preload(listPreloads
 // #region typing-errors
 // What createPost returns, on the client: the errors are typed by field.
 export type CreatePostState = JsonReturn<typeof createPost>;
-export type PostErrors = ErrorMessagesOf<ReturnType<typeof Post.changeset>>;
+export type PostErrors = ErrorMessages<ReturnType<typeof Post.changeset>>;
 // #endregion typing-errors
 
 // #region serverless

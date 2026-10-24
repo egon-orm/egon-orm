@@ -163,7 +163,7 @@ The `egon` command prints full messages.
 ### Removed and renamed exports
 
 A few names that were exported before 0.1.0 are gone or renamed (owner decisions,
-2026-10-22). Nothing replaces the removed functions: the adapters call them for you.
+2026-10-22 and 2026-10-24). Nothing replaces the removed functions: the adapters call them for you.
 
 | Before | From 0.1.0 |
 |---|---|
@@ -171,6 +171,7 @@ A few names that were exported before 0.1.0 are gone or renamed (owner decisions
 | `normalizeSqliteError` from `@egon-orm/sqlite` | Not exported. |
 | `normalizeMysqlError` from `@egon-orm/mysql` | Not exported. |
 | `ConstraintOptions` from `egon-orm/migration` (the options of `m.createConstraint`) | `CreateConstraintOptions`. The `ConstraintOptions` of `egon-orm`, a changeset's constraint options, is unchanged. |
+| `ErrorMessagesOf` from `egon-orm` (the type of `errorMessages()`) | `ErrorMessages`. |
 | `plan()`, `named` and `query` of a `PreparedQuery`; `operations` of the migration builder; the protected `context` and `added` of the migration builders | Not in the published declarations. They were for the library's own use. |
 
 `createAdapter` stays exported, but it is internal to the Egon packages: its driver

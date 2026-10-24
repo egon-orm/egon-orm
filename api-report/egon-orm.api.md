@@ -714,7 +714,7 @@ export class Changeset<S extends ChangesetSource = AnySchema, New extends boolea
     readonly constraints: readonly Constraint[];
     readonly data: DataMember<S, New>;
     deleteChange(field: FieldName<S>): this;
-    errorMessages<C extends ChangesetLike>(this: C): ErrorMessagesOf<C>;
+    errorMessages<C extends ChangesetLike>(this: C): ErrorMessages<C>;
     readonly errors: Readonly<Record<string, readonly ChangesetError[]>>;
     exclusionConstraint(field: FieldName<S>, options?: ConstraintOptions): this;
     fetchChange<K extends FieldName<S>>(field: K): {
@@ -1442,7 +1442,7 @@ export type ErrorId = keyof typeof messages;
 type ErrorKeys<S, E extends string> = FieldName<S> | (string extends AssocName<S> ? never : AssocName<S>) | E | "$base";
 
 // @public
-export type ErrorMessagesOf<C> = C extends AnySchema ? TypedErrorTree<C, never, string> : ErrorTreeOf<C, string>;
+export type ErrorMessages<C> = C extends AnySchema ? TypedErrorTree<C, never, string> : ErrorTreeOf<C, string>;
 
 // Warning: (ae-forgotten-export) The symbol "NestedErrors" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "EmbedMany" needs to be exported by the entry point index.d.ts
