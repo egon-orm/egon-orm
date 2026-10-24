@@ -11,9 +11,9 @@ from a status note or a CI log says so.
 
 ## 1. Summary and recommendation
 
-**Recommendation: publish `0.1.0` once the owner has done the release settings in §9 (items
-O1 to O6), has decided the 50 ms budget (P2) and accepted the sampled query and compiler
-survivors (P6), and after one small packaging fix (raise the Zod peer floor, P1).** No code
+**Recommendation: publish `0.1.0` after O1–O6 and the follow-up PR** (see "Owner
+decisions, 2026-10-24" below; at the time of the audit the list was O1–O6, the 50 ms
+decision P2, the acceptance of the sampled survivors P6, and the Zod peer floor P1). No code
 blocker was found. Nothing found is data loss, an injection path or a security hole in
 Egon's own code.
 
@@ -64,6 +64,28 @@ Not met and accepted by the owner: the 200 ms completions budget on large connec
 (§4.2). Not met and **not** accepted yet: the 50 ms budget for the first expression (item 3). Still to be accepted: the sampled query
 and compiler survivors (item 4). Not run: step 19 and every box deferred to it; **the published benchmark has not
 run.**
+
+## Owner decisions, 2026-10-24
+
+The owner answered §10 with "do the recommended". The rest of this report is left as it was
+at the time of the audit; these decisions supersede it where they differ.
+
+- **§10 item 1 (O1–O6):** the owner does them. Still open until they are done.
+- **Unscoped `egon-orm` name:** yes, the owner publishes a placeholder.
+- **P1:** the Zod peer floor goes to `^4.6.6` before `0.1.0`, in a follow-up PR.
+- **P2:** the 50 ms budget is redefined to exclude the one-time cost of the first expression
+  a program checks. Type health therefore moves to "ready with caveats", with the
+  completions miss still accepted. This takes effect when the follow-up PR updates
+  `21-release.md`.
+- **P6:** accepted. `0.1.0` ships with the query and compiler survivors sampled; triaging
+  them one by one is a 1.0 gate.
+- **Database floors (P3):** CI jobs for Postgres 14 and MySQL 8.0.31 before `0.1.0`, in the
+  follow-up PR.
+- **1.0 gate:** completions under 200 ms and the query and compiler triage are added
+  (§8 items 2 and 3).
+- **`ErrorMessagesOf`** is renamed to `ErrorMessages` before `0.1.0`, in the follow-up PR.
+- **Boxes 11.5 and 20.5** (the leak check and the docs chunk-size warning) are fixed in the
+  follow-up PR.
 
 ## 2. What I ran
 
