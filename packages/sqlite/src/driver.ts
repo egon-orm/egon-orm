@@ -79,17 +79,20 @@ export const SQLITE_RUNTIME: SqliteRuntime = {
 
 /**
  * The options of `new Database(filename, options)`. better-sqlite3 tests each option with
- * `in` (checked against better-sqlite3 12.11.1, `lib/database.js` and `lib/util.js`), so an
- * option planted on `Object.prototype` would reach it: `nativeBinding` loads a native
- * addon, `verbose` is handed every statement. The object has no prototype, and every option
- * that version uses is set as an own property, with the driver's own default where Egon has
- * no value (owner decision, 2026-10-24). `readOnly` and `memory`, which it reads only to
- * refuse them, are left out: without a prototype they are absent.
+ * `in` (checked against better-sqlite3 12.11.1 and 13.0.3, `lib/database.js` and
+ * `lib/util.js`), so an option planted on `Object.prototype` would reach it:
+ * `nativeBinding` loads a native addon, `verbose` is handed every statement. The object has
+ * no prototype, so no inherited key reaches the driver (owner decision, 2026-10-24); the
+ * options Egon has a value or a default for are set as own properties, with the driver's
+ * own defaults. Left out, and absent because there is no prototype: `nativeBinding` (the
+ * per-platform entry points of 13.x, such as `better-sqlite3/darwin-arm64`, refuse
+ * `'nativeBinding' in options` even for `null`; absent, the driver loads its own addon),
+ * and `readOnly` and `memory`, which it reads only to refuse them.
  *
  * @example
  * ```ts
  * databaseOptions({ filename: ":memory:", readonly: false, pragmas: [], attach: [] });
- * // { readonly: false, fileMustExist: false, timeout: 5000, verbose: null, nativeBinding: null }
+ * // { readonly: false, fileMustExist: false, timeout: 5000, verbose: null }
  * ```
  */
 export function databaseOptions(settings: OpenSettings): Database.Options {
@@ -100,7 +103,7 @@ export function databaseOptions(settings: OpenSettings): Database.Options {
   options.fileMustExist = false;
   options.timeout = 5000;
   options.verbose = null;
-  options.nativeBinding = null;
+  // No nativeBinding, not even null: 13.x's per-platform entry points throw when it is present.
   return options as Database.Options;
 }
 

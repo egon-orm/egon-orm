@@ -77,8 +77,8 @@ of the migration builder, and the migration builders' `context` and `added`).
 - `__proto__` is refused as a batch step name, a binding alias and a `param()` name (each
   keys an object), and a `__proto__` key of JSON data stays a key when an embed is stored
   or a preloaded row is copied.
-- The SQLite adapter gives `better-sqlite3` every option it uses set as an own property,
-  on an object with no prototype, so a key planted on `Object.prototype` (`verbose`,
+- The SQLite adapter gives `better-sqlite3` its options on an object with no prototype,
+  Egon's values set as own properties, so a key planted on `Object.prototype` (`verbose`,
   `nativeBinding`) never reaches it.
 
 ### Queries

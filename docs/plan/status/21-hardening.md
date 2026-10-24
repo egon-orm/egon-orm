@@ -323,11 +323,12 @@ Both raised in the first version of this note; the owner approved both recommend
   **Decision:** better-sqlite3 is covered, pg / pg-pool and mysql2 are left to the
   drivers.
   - `packages/sqlite/src/driver.ts` `databaseOptions()`: the options of
-    `new Database(…)` are an object without a prototype with every option better-sqlite3
-    12.11.1 uses (`lib/database.js`, `lib/util.js`) set as an own property: `readonly`
-    (the caller's), `fileMustExist: false`, `timeout: 5000`, `verbose: null`,
-    `nativeBinding: null` (its own defaults). `readOnly` and `memory`, which it reads only
-    to refuse them, are absent (no prototype).
+    `new Database(…)` are an object without a prototype, so no inherited key reaches
+    better-sqlite3 (checked against 12.11.1, `lib/database.js` and `lib/util.js`). Set as
+    own properties: `readonly` (the caller's), `fileMustExist: false`, `timeout: 5000`,
+    `verbose: null` (its own defaults). Absent, which without a prototype means the
+    driver's default: `nativeBinding` (left out in round 3, see below), and `readOnly` and
+    `memory`, which it reads only to refuse them.
   - **13.x checked** (round 2): the newest release, 13.0.3, downloaded with `npm pack` into
     the scratchpad (not installed), `lib/database.js` and `lib/util.js` read. It reads the
     options object it is given in place, with `in` and direct reads, as 12.x does: the same
@@ -337,9 +338,11 @@ Both raised in the first version of this note; the owner approved both recommend
     `Database` throws when `'nativeBinding' in options`, even for `null`. The default
     entry point (`lib/index.js`), which the adapter imports, accepts it. So under 13.x the
     adapter works as it is; a bundler that rewrote the import to a platform entry point
-    would fail on our own `nativeBinding: null` key. Leaving that key out would be just as
-    safe (without a prototype it is absent, and the driver uses its default) and would work
-    with every entry point. Not changed in this PR; raised with the coordinator.
+    would have failed on our own `nativeBinding: null` key. Round 3 (approved by the
+    coordinator as within the owner's decision) leaves that key out: without a prototype it
+    is absent, and the driver loads its own addon. The other keys Egon sets (`readonly`,
+    `fileMustExist`, `timeout`, `verbose`) are read the same way by every 13.0.3 entry
+    point; only `nativeBinding` is refused by the platform ones.
   - Test (`packages/sqlite/src/hostile-options.test.ts`): with `verbose` (a spy),
     `nativeBinding` (a path that does not exist), `readOnly` and `memory` planted, a
     database opens and runs a statement, and the spy is never called. Against the old
@@ -439,7 +442,24 @@ Three minor points, cleared:
    `schema/json.ts` and `internal/inspect.ts` import it.
 2. better-sqlite3 13.x read (13.0.3): see "13.x checked" under the owner decisions above. It
    reads options as 12.x does; one difference for its per-platform entry points, raised
-   with the coordinator, not changed.
+   with the coordinator (round 3 below).
 3. CHANGELOG, SECURITY.md and the driver's TSDoc say "every option it uses set as an own
    property, on an object with no prototype" (`readOnly` and `memory` are left out on
-   purpose).
+   purpose). Reworded again in round 3, when `nativeBinding` was left out too.
+
+## Round 3: `nativeBinding` left out
+
+The coordinator approved leaving `nativeBinding` out of `databaseOptions()` (the owner's
+aim, that no inherited key reaches the driver, is met by the object having no prototype).
+
+- `databaseOptions()` no longer sets `nativeBinding`; a code comment and the TSDoc say why
+  (13.x's per-platform entry points refuse `'nativeBinding' in options`, even for `null`).
+- The planted-`nativeBinding` test stays. With the options object given a normal prototype
+  (`{}` instead of `Object.create(null)`), it fails, and a scratch test with only
+  `nativeBinding` planted fails with `Cannot find module '/nonexistent/planted-addon.node'`:
+  the planted path is loaded. Restored afterwards.
+- The other keys against 13.0.3's platform entry points: `lib/database.js` is shared by
+  every entry point, and its only entry-point-specific check is the one on
+  `nativeBinding`; `readonly`, `fileMustExist`, `timeout` and `verbose` are accepted.
+- CHANGELOG and SECURITY.md: "its options on an object with no prototype, Egon's values
+  set as own properties".
