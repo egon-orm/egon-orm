@@ -46,6 +46,41 @@ describe("a key planted on Object.prototype is no setting of the CLI", () => {
     await expect(loadConfig(cwd, undefined, async () => ({}))).rejects.toThrow(/an object with an adapter/);
   });
 
+  test("an io whose methods are on its class's prototype works", async () => {
+    class Io {
+      out = "";
+      readonly cwd = cwd;
+      readonly env = {};
+      stdout(text: string): void {
+        this.out += text;
+      }
+      stderr(): void {}
+      now(): Date {
+        return new Date("2026-10-24T09:30:00Z");
+      }
+    }
+    const io = new Io();
+    expect(await run(["--version"], io)).toBe(0);
+    expect(io.out).toMatch(/\d+\.\d+\.\d+/);
+  });
+
+  test("an error that is not Egon's is reported without a planted sql or cause", async () => {
+    plant("sql", "select planted");
+    let err = "";
+    const io = {
+      stdout: () => {},
+      stderr: (text: string) => {
+        err += text;
+      },
+      cwd,
+      env: {},
+      now: () => new Date("2026-10-24T09:30:00Z"),
+    };
+    expect(await run(["migrate"], io)).not.toBe(0);
+    expect(err).toContain("error:");
+    expect(err).not.toContain("select planted");
+  });
+
   test("a planted migrations directory is not where migrate create writes", async () => {
     await writeFile(join(cwd, "egon.config.mjs"), CONFIG);
     plant("migrations", { directory: "planted" });

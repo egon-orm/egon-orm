@@ -45,6 +45,12 @@ describe("validateRequired", () => {
       email: [{ message: "can't be blank", validation: "required", meta: {} }],
       name: [{ message: "can't be blank", validation: "required", meta: {} }],
     });
+    expect(cs.validations).toEqual([
+      ["email", { validation: "required" }],
+      ["name", { validation: "required" }],
+    ]);
+    const passing = change(hedy()).validateRequired(["email", "email"]);
+    expect(passing.validations).toEqual([["email", { validation: "required" }]]);
   });
 
   test("checks the data too: a loaded row's values count", () => {

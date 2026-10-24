@@ -169,6 +169,23 @@ describe("prototype pollution", () => {
     ]);
   });
 
+  test("a date given as { year, month, day } reads only its own parts", () => {
+    class Day extends Schema("days", { id: t.integer().primaryKey(), on: t.date() }) {}
+    plant("year", 2026);
+    plant("month", 10);
+    plant("day", 24);
+    expect(cast(Day, { on: {} }, ["on"]).valid).toBe(false);
+    expect(cast(Day, { on: { year: 2026, month: 1, day: 2 } }, ["on"]).changes).toEqual({ on: "2026-01-02" });
+  });
+
+  test("an embedded object reads only its own fields: a missing one takes its default", () => {
+    plant("theme", "dark");
+    const type = meta(User).fieldsByName.get("settings")?.type;
+    const result = type?.cast({});
+    expect(result?.success).toBe(true);
+    expect((result as { data?: { theme?: unknown } } | undefined)?.data?.theme).toBe("light");
+  });
+
   test("params that are not a plain object are refused: no inherited fields at all", () => {
     expect(() => cast(User, Object.create({ role: "admin" }), ["role"])).toThrow(CastError);
     class Body {
@@ -269,7 +286,10 @@ describe("an option planted on Object.prototype is no option", () => {
     plant("with", () => {
       throw new Error("the planted with was called");
     });
-    const cs = cast(owner(), {}, []).castAssoc("leaves");
+    // No children and none given: required would add can't be blank.
+    const childless = loaded(Owner, { id: 7, title: null }, { leaves: [] });
+    const cs = cast(childless, {}, []).castAssoc("leaves");
+    expect(cs.errors).toEqual({});
     expect(cs.valid).toBe(true);
     const again = cast(owner(), { leaves: [{ id: 1, name: "two" }] }, []).castAssoc("leaves");
     expect(again.valid).toBe(true);
@@ -313,6 +333,14 @@ describe("an option planted on Object.prototype is no option", () => {
     plant("meta", { planted: true });
     const cs = cast(User, { age: "x" }, ["age"]);
     expect(cs.errors.age).toEqual([{ message: "is invalid", validation: "cast", meta: { type: "integer" } }]);
+  });
+
+  test("an error a validateChange function returns keeps its own meta and validation", () => {
+    plant("meta", { planted: true });
+    plant("validation", "planted");
+    const cs = cast(User, { name: "x" }, ["name"]).validateChange("name", () => ({ message: "is odd" }));
+    expect(cs.errors.name).toEqual([{ message: "is odd", meta: {} }]);
+    expect(Object.hasOwn(cs.errors.name?.[0] ?? {}, "validation")).toBe(false);
   });
 
   test("a validation that leaves the changes alone keeps them", () => {
@@ -560,6 +588,44 @@ describe("a field listed twice in a write's options is written once", () => {
     await repo.insertAll(User, [{ email: "a@b.c" }], { returning: ["id", "id"] });
     const sql = driver.sent.find((each) => each.sql.startsWith("insert"))?.sql ?? "";
     expect(sql.slice(sql.indexOf("returning")).match(/"id"/g)).toHaveLength(1);
+  });
+
+  /** The SQL of the first statement that starts with `verb`. */
+  const sent = (driver: RecordingDriver, verb: string): string =>
+    driver.sent.find((each) => each.sql.startsWith(verb))?.sql ?? "";
+  const returned = (sql: string, column: string): number =>
+    sql.slice(sql.indexOf("returning")).split(`"${column}"`).length - 1;
+
+  test("insert's returning", async () => {
+    const { repo, driver } = setup();
+    driver.rows = [{ c0: 1 }];
+    await repo
+      .insert(cast(User, { email: "a@b.c" }, ["email"]), { returning: ["name", "name"] })
+      .catch(() => undefined);
+    expect(returned(sent(driver, "insert"), "name")).toBe(1);
+  });
+
+  test("update's returning", async () => {
+    const { repo, driver } = setup();
+    const ada = loaded(User, { id: 1, email: "a@b.c", role: "member", lockVersion: 1 });
+    driver.rows = [{ c0: "Ada" }];
+    await repo
+      .update(cast(ada, { name: "Ada" }, ["name"]), { returning: ["name", "name"] })
+      .catch(() => undefined);
+    expect(returned(sent(driver, "update"), "name")).toBe(1);
+  });
+
+  test("onConflict's target and except", async () => {
+    const { repo, driver } = setup();
+    driver.rows = [{ c0: 1 }];
+    await repo
+      .insert(cast(User, { email: "a@b.c", name: "Ada" }, ["email", "name"]), {
+        onConflict: { target: ["email", "email"], update: { except: ["name", "name"] } },
+      })
+      .catch(() => undefined);
+    const sql = sent(driver, "insert");
+    expect(sql).toContain('on conflict ("email") do update set');
+    expect(sql).not.toMatch(/"name" = "excluded"\."name"/);
   });
 });
 

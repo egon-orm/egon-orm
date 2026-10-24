@@ -217,7 +217,7 @@ Left as plain reads: keys that are always present and required by the type
 | `mysql/src/options.ts` | `MysqlOptions`, `MysqlPoolOptions` (`options ?? {}` → frozen, no prototype; `FIXED` now frozen) | connectionString, host, port, user, password, database, ssl, pool, max, idleTimeoutMs, connectionTimeoutMs |
 | `zod/src/to-zod.ts` | `ToZodOptions`, the `ZodHint` on a type | mode, pick, omit; zod |
 | `cli/src/config.ts` | the config module and `EgonConfig` | default, config, adapter, database, database.name, database.admin, migrations; the loaded config is a copy without a prototype |
-| `cli/src/cli.ts` | `CliIo` given to `run()`, the migrations settings (`?? {}` → frozen, no prototype), `io.env` | stdout, stderr, cwd, env, now; NODE_ENV |
+| `cli/src/cli.ts` | the migrations settings (`?? {}` → frozen, no prototype), `io.env`, a reported error (round 1) | NODE_ENV; sql, version, cause. (`CliIo` itself is a capability object read as given: round 1.) |
 
 ### Left alone on purpose (not options)
 
@@ -227,11 +227,11 @@ Left as plain reads: keys that are always present and required by the type
   them; they are type checks of values, not options.
 - **Objects whose members may come from a class prototype:** hand-written field types
   (`cast`, `equal`, `fromDb`, `toDb`), adapters (`compile`, `execute`, …), a caller's
-  `pg.Pool`, custom node emitters, the adapter's `typeOverrides`. An own-only read would
-  break a class instance.
+  `pg.Pool`, custom node emitters, the adapter's `typeOverrides`, the CLI's `CliIo`. An
+  own-only read would break a class instance.
 - **Results and data:** Standard Schema results and issues (a library may define them on a
-  class), `validateChange`'s returned errors, embed rows from plain objects, date objects,
-  `toJSON`. These are values, not options.
+  class) and `toJSON`. (Round 1 moved `validateChange`'s returned errors, the date object
+  form and embedded objects out of this list: they are now read as own properties.)
 - **Module namespaces** from `import()` (no prototype) and Node's `parseArgs` values (no
   prototype).
 
@@ -256,13 +256,11 @@ without its fix and failed (the changeset ones by reverting the four changeset f
   dialect packages.
 
 Not covered by a test of its own: the three `planCacheSize` reads, `cancel.ts`'s `key`,
-`cancelTimeoutMs`, the CLI's `ioOf` / `NO_MIGRATIONS` / `NODE_ENV`, and
+`cancelTimeoutMs`, the CLI's `NO_MIGRATIONS` / `NODE_ENV`, and
 `set-operations.ts`'s `meta`. Each is a one-line `own()` read of the same kind.
 
 ### Behaviour changes a caller could notice
 
-- A `CliIo` passed to `run()` whose `stdout` etc. live on a class prototype no longer
-  works; `CliIo` is documented as an object, and the guide and tests pass object literals.
 - The CLI's loaded config is a copy without a prototype (`loadConfig` is not exported).
 - Error reference pages (`docs/site/reference/errors/*.md`, generated): five message
   templates name their placeholders differently (`{timeoutMs}` for
@@ -290,11 +288,14 @@ Not covered by a test of its own: the three `planCacheSize` reads, `cancel.ts`'s
 
 On the final tree:
 
-- `pnpm check` passes: unit 161 files, 6,621 tests (coverage thresholds met); type tests 35
-  files, 608 tests; build.
-- `pnpm api:check`: up to date for 9 entry points.
+- `pnpm check` passes: unit 162 files, 6,637 tests (coverage thresholds met); type tests 35
+  files, 608 tests; build. (On `bda5f51`: 161 files, 6,621 tests.)
+- `pnpm api:check`: up to date for 9 entry points. The reports of `egon-orm`,
+  `egon-orm/migration` and `egon-orm/messages` gained the three new error ids of the
+  owner-decision commit (`query.aliasProto`, `query.batchStepName`, `query.paramName`) in
+  the message catalog's type; nothing else changed.
 - `pnpm lint:packages`, `pnpm smoke`: pass.
-- `EGON_TEST_TIER2=1 pnpm test:integration --maxWorkers=2`: 51 files, 1,801 passed, 2
+- `EGON_TEST_TIER2=1 pnpm test:integration --maxWorkers=2` (Postgres, MySQL and SQLite): 51 files, 1,801 passed, 2
   expected failures, 55 skipped.
 
 ## Checks I changed, exempted or worked around
@@ -368,3 +369,52 @@ Both raised in the first version of this note; the owner approved both recommend
 ## Requests
 
 None open. (The batch step named `__proto__` is resolved above.)
+
+## Review round 1
+
+Review of `bda5f51` (separate reviewer): CHANGES REQUESTED. Confirmed: `distinct()`, 15 of
+the 16 plant tests the reviewer reverted fail without their fix, the hot path, and seeding
+in mutation runs only. Fixed in this round (after `1fb461c`, the owner decisions):
+
+1. **`CliIo` read own-only broke class instances.** `ioOf()` in `cli/src/cli.ts` is gone:
+   `CliIo` is an exported interface with five required members, a capability object, and
+   reading it own-only protected nothing. `own(io.env, "NODE_ENV")` stays. Test: "an io
+   whose methods are on its class's prototype works" (`cli/src/hostile-options.test.ts`),
+   which fails with `ioOf()`.
+2. **The castAssoc `required` test passed without its fix** (the owner's children were
+   loaded). It now casts an owner with no children and no `leaves` param, where a planted
+   `required: true` adds `can't be blank`; checked to fail on `main`'s `nested/change.ts`
+   with that error.
+3. **`validateRequired(["email", "email"])` recorded the name twice in `validations`.**
+   It records `distinct(names)` now; the duplicate-name test checks `validations` for a
+   failing and a passing check, and fails without the fix.
+4. **Reads the audit missed:**
+   - `issuesOf()` (`changeset.ts`) destructured `message`, `validation` and `meta` from
+     what a `validateChange` function returns: a planted `meta` or `validation` ended up
+     in the error. Own reads now. Test ("an error a validateChange function returns keeps
+     its own meta and validation"), failing without the fix.
+   - **User input:** `dateObjectToMillis()` (`types/temporal.ts`) destructured
+     `{ year, month, day }` from the cast input, so `{}` cast to a planted date. Own reads
+     now: `{}` is a cast error. The same sweep of every cast in `types/` that reads an
+     object param found one more: `rowFrom()` (`types/embed.ts`, an embedded value given
+     as a plain object to the embed type's `cast`) read a missing field's value through
+     the prototype, so the planted value was cast into the row instead of the field's
+     default. `hasOwn` now. Tests for both ("a date given as { year, month, day } reads
+     only its own parts", "an embedded object reads only its own fields"), failing
+     without their fixes. The rest of `types/` reads no field of an object param:
+     timestamps and dates given as a `Date` read its internal slot (`getTime` from
+     `Date.prototype`); JSON values are walked with `Object.keys`; arrays by index (a
+     sparse array, which JSON cannot make, would read a hole through the prototype; not
+     changed); every scalar (integer, float, bigint, decimal, uuid, string, boolean,
+     time, enum, binary) takes primitives only.
+   - `report()` (`cli/src/cli.ts`) read `sql`, `version` and `cause` of any error through
+     the prototype. Own reads now. Test ("an error that is not Egon's is reported without
+     a planted sql or cause"), failing without the fix.
+5. **Tests:** `internal/distinct.test.ts` (the same reference without repeats, an empty
+   list, first-occurrence order, reference comparison); repeated names in insert and
+   update `returning`, `onConflict.target` and `except`. Against `write.ts` without the
+   `fieldList` dedupe, the target/except test fails; the insert and update `returning`
+   tests pass either way, because `returning` was already filtered through the persisted
+   fields (they pin the behaviour).
+6. **CHANGELOG:** "every options read Egon makes", with a pointer to `SECURITY.md` for the
+   drivers, and a line for the date and embed casts.

@@ -382,7 +382,8 @@ function rowFrom(schema: AnySchema, schemaMeta: SchemaMeta, input: unknown): obj
   }
   const values: unknown[] = [];
   for (const field of schemaMeta.persisted) {
-    let value = given[field.name];
+    // Own properties only: a value planted on Object.prototype is not input.
+    let value = hasOwn(given, field.name) ? given[field.name] : undefined;
     if (value === undefined) {
       value = missingValue(field);
       if (value === undefined && field.autogenerate !== undefined) value = field.autogenerate.fn();

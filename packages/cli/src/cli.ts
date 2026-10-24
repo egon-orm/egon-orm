@@ -106,11 +106,6 @@ function atMostOne(values: Values, flags: readonly string[]): void {
  * ```
  */
 export async function run(argv: readonly string[], io: CliIo = processIo()): Promise<number> {
-  return runWith(argv, ioOf(io));
-}
-
-/** {@link run}, with the caller's `io` read as own properties. */
-async function runWith(argv: readonly string[], io: CliIo): Promise<number> {
   const [first, ...rest] = argv;
   const json = rest.includes("--json");
   try {
@@ -148,8 +143,14 @@ async function runWith(argv: readonly string[], io: CliIo): Promise<number> {
 function report(io: CliIo, json: boolean, error: unknown): void {
   const egon = isEgonError(error) ? error : undefined;
   const message = error instanceof Error ? error.message : String(error);
+  // The error's own properties only: an error that is not Egon's may have none of these.
+  const details =
+    typeof error === "object" && error !== null
+      ? (error as { readonly version?: unknown; readonly sql?: unknown; readonly cause?: unknown })
+      : undefined;
+  const sql = own(details, "sql");
   if (json) {
-    const details = error as { readonly version?: unknown; readonly sql?: unknown };
+    const version = own(details, "version");
     io.stdout(
       `${JSON.stringify({
         ok: false,
@@ -157,17 +158,16 @@ function report(io: CliIo, json: boolean, error: unknown): void {
           name: error instanceof Error ? error.name : "Error",
           code: egon?.code,
           message,
-          version: typeof details?.version === "number" ? details.version : undefined,
-          sql: typeof details?.sql === "string" ? details.sql : undefined,
+          version: typeof version === "number" ? version : undefined,
+          sql: typeof sql === "string" ? sql : undefined,
         },
       })}\n`,
     );
     return;
   }
   io.stderr(`error: ${message}\n`);
-  const sql = (error as { readonly sql?: unknown } | null)?.sql;
   if (typeof sql === "string") io.stderr(`  in: ${sql}\n`);
-  const cause = (error as { readonly cause?: unknown } | null)?.cause;
+  const cause = own(details, "cause");
   if (
     egon === undefined &&
     !(error instanceof CliError) &&
@@ -180,20 +180,6 @@ function report(io: CliIo, json: boolean, error: unknown): void {
     // ConstraintError) may quote a value, and the adapter leaves it out on purpose.
     io.stderr(`  caused by: ${cause.message}\n`);
   }
-}
-
-/**
- * The caller's `io`, read as own properties only: a member planted on Object.prototype is
- * not used in place of one the caller left out.
- */
-function ioOf(given: CliIo): CliIo {
-  return {
-    stdout: own(given, "stdout") as CliIo["stdout"],
-    stderr: own(given, "stderr") as CliIo["stderr"],
-    cwd: own(given, "cwd") as string,
-    env: own(given, "env") as CliIo["env"],
-    now: own(given, "now") as CliIo["now"],
-  };
 }
 
 /** No migrations settings: no prototype, so a key planted on Object.prototype is no setting. */

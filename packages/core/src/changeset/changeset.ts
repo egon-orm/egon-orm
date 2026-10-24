@@ -266,6 +266,11 @@ function appendErrors(
   return { ...errors, [key]: list };
 }
 
+/** A field name, or a list of them without repeats (a name listed twice is recorded once). */
+function listed(names: string | readonly string[]): string | readonly string[] {
+  return typeof names === "string" ? names : distinct(names);
+}
+
 function checkErrorKey(key: unknown, fn: string): string {
   if (typeof key !== "string" || key === "" || key === "__proto__") {
     throw new QueryError(
@@ -875,7 +880,7 @@ export class Changeset<
       }
     }
     if (missing === undefined) {
-      return this.#validated(names, "required", options, changes, this.errors, this.valid);
+      return this.#validated(listed(names), "required", options, changes, this.errors, this.valid);
     }
     const error = errorOf(messageOf(message, BLANK, EMPTY), "required", EMPTY);
     let nextChanges = changes;
@@ -884,7 +889,7 @@ export class Changeset<
       if (hasOwn(nextChanges, name)) nextChanges = without(nextChanges, name);
       errors = appendErrors(errors, name, [error], false);
     }
-    return this.#validated(names, "required", options, nextChanges, errors, false);
+    return this.#validated(listed(names), "required", options, nextChanges, errors, false);
   }
 
   /**
@@ -1984,13 +1989,12 @@ function issuesOf(result: unknown): readonly ChangesetError[] {
   const list: readonly unknown[] = Array.isArray(result) ? result : [result];
   return list.map((item) => {
     if (typeof item === "string") return { message: item, meta: EMPTY };
-    if (
-      typeof item === "object" &&
-      item !== null &&
-      typeof (item as ChangeValidatorError).message === "string"
-    ) {
-      const { message, validation, meta } = item as ChangeValidatorError;
-      return errorOf(message, validation, meta === undefined ? EMPTY : meta);
+    // The error's own properties only: a key planted on Object.prototype is no part of it.
+    const error = typeof item === "object" && item !== null ? (item as ChangeValidatorError) : undefined;
+    const message = own(error, "message");
+    if (typeof message === "string") {
+      const meta = own(error, "meta");
+      return errorOf(message, own(error, "validation"), meta === undefined ? EMPTY : meta);
     }
     throw new QueryError(
       "query.validateChangeResult",

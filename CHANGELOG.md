@@ -67,9 +67,13 @@ of the migration builder, and the migration builders' `context` and `added`).
 - A field name listed twice (in `cast`'s permitted list, `validateRequired`,
   `uniqueConstraint`, `validateUniqueAsync`, or a repo write's `returning` and
   `onConflict` lists) counts once: one error, one column.
-- Options objects are read as own properties only, everywhere: a key planted on
+- Every options read Egon makes is of own properties only: a key planted on
   `Object.prototype` is never taken as an option, and neither are the library's defaults'
-  inherited keys.
+  inherited keys. What the `pg` and `mysql2` drivers read from their own configuration is
+  left to them ([SECURITY.md](./SECURITY.md)).
+- A date given as `{ year, month, day }` and an embedded value given as an object read
+  only their own properties: `{}` is a cast error for a date, and a missing embedded field
+  takes its default, whatever `Object.prototype` holds.
 - `__proto__` is refused as a batch step name, a binding alias and a `param()` name (each
   keys an object), and a `__proto__` key of JSON data stays a key when an embed is stored
   or a preloaded row is copied.

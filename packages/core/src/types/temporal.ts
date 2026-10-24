@@ -120,7 +120,11 @@ function dateTextToMillis(text: string): number {
 /** Reads `{ year, month, day }`, each a whole number or a string of digits (form input). */
 function dateObjectToMillis(input: object): number {
   try {
-    const { year, month, day } = input as { year?: unknown; month?: unknown; day?: unknown };
+    // Own properties only: a year, month or day planted on Object.prototype is not input.
+    const parts = input as { year?: unknown; month?: unknown; day?: unknown };
+    const year = own(parts, "year");
+    const month = own(parts, "month");
+    const day = own(parts, "day");
     if (year == null || month == null || day == null) return Number.NaN;
     const integer = integerType();
     const y = integer.cast(year);
