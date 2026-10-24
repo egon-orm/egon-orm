@@ -11,6 +11,7 @@
  */
 import type { FieldMeta } from "../contracts/schema.js";
 import type { AnyFieldType } from "../contracts/type.js";
+import { setOwn } from "../internal/own.js";
 import { elementTypeOf } from "../types/composite.js";
 import { toBase64 } from "../types/embed.js";
 import { MODEL } from "./model.js";
@@ -37,15 +38,6 @@ interface JsonModel {
 interface RowLike {
   readonly [MODEL]: JsonModel;
   readonly [key: string]: unknown;
-}
-
-/** Assigns an own property, also for the key `"__proto__"`, which JSON data may hold. */
-function setOwn(out: Record<string, unknown>, key: string, value: unknown): void {
-  if (key === "__proto__") {
-    Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
-  } else {
-    out[key] = value;
-  }
 }
 
 // ---------------------------------------------------------------------------

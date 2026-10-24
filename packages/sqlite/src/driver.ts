@@ -81,8 +81,8 @@ export const SQLITE_RUNTIME: SqliteRuntime = {
  * The options of `new Database(filename, options)`. better-sqlite3 tests each option with
  * `in` (checked against better-sqlite3 12.11.1, `lib/database.js` and `lib/util.js`), so an
  * option planted on `Object.prototype` would reach it: `nativeBinding` loads a native
- * addon, `verbose` is handed every statement. The object has no prototype, and every key
- * that version reads is set as an own property, with the driver's own default where Egon has
+ * addon, `verbose` is handed every statement. The object has no prototype, and every option
+ * that version uses is set as an own property, with the driver's own default where Egon has
  * no value (owner decision, 2026-10-24). `readOnly` and `memory`, which it reads only to
  * refuse them, are left out: without a prototype they are absent.
  *

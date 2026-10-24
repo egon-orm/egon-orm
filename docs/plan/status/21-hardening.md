@@ -323,12 +323,23 @@ Both raised in the first version of this note; the owner approved both recommend
   **Decision:** better-sqlite3 is covered, pg / pg-pool and mysql2 are left to the
   drivers.
   - `packages/sqlite/src/driver.ts` `databaseOptions()`: the options of
-    `new Database(…)` are an object without a prototype with every key better-sqlite3
-    12.11.1 reads (`lib/database.js`, `lib/util.js`) set as an own property: `readonly`
+    `new Database(…)` are an object without a prototype with every option better-sqlite3
+    12.11.1 uses (`lib/database.js`, `lib/util.js`) set as an own property: `readonly`
     (the caller's), `fileMustExist: false`, `timeout: 5000`, `verbose: null`,
     `nativeBinding: null` (its own defaults). `readOnly` and `memory`, which it reads only
-    to refuse them, are absent (no prototype). The peer range also allows 13.x; a key a
-    later version reads with `in` is absent too, for the same reason.
+    to refuse them, are absent (no prototype).
+  - **13.x checked** (round 2): the newest release, 13.0.3, downloaded with `npm pack` into
+    the scratchpad (not installed), `lib/database.js` and `lib/util.js` read. It reads the
+    options object it is given in place, with `in` and direct reads, as 12.x does: the same
+    keys (`readOnly` and `memory` refused; `readonly`, `fileMustExist`, `timeout`,
+    `verbose`, `nativeBinding`), no copy into a plain object first. One difference:
+    13.x has per-platform entry points (`better-sqlite3/darwin-arm64` and the like) whose
+    `Database` throws when `'nativeBinding' in options`, even for `null`. The default
+    entry point (`lib/index.js`), which the adapter imports, accepts it. So under 13.x the
+    adapter works as it is; a bundler that rewrote the import to a platform entry point
+    would fail on our own `nativeBinding: null` key. Leaving that key out would be just as
+    safe (without a prototype it is absent, and the driver uses its default) and would work
+    with every entry point. Not changed in this PR; raised with the coordinator.
   - Test (`packages/sqlite/src/hostile-options.test.ts`): with `verbose` (a spy),
     `nativeBinding` (a path that does not exist), `readOnly` and `memory` planted, a
     database opens and runs a statement, and the spy is never called. Against the old
@@ -418,3 +429,17 @@ in mutation runs only. Fixed in this round (after `1fb461c`, the owner decisions
    fields (they pin the behaviour).
 6. **CHANGELOG:** "every options read Egon makes", with a pointer to `SECURITY.md` for the
    drivers, and a line for the date and embed casts.
+
+## Review round 2
+
+Review of `f110cfc`: APPROVED; every fix and both decisions were checked by reverting each.
+Three minor points, cleared:
+
+1. `setOwn` had three identical copies. The one in `internal/own.ts` stays;
+   `schema/json.ts` and `internal/inspect.ts` import it.
+2. better-sqlite3 13.x read (13.0.3): see "13.x checked" under the owner decisions above. It
+   reads options as 12.x does; one difference for its per-platform entry points, raised
+   with the coordinator, not changed.
+3. CHANGELOG, SECURITY.md and the driver's TSDoc say "every option it uses set as an own
+   property, on an object with no prototype" (`readOnly` and `memory` are left out on
+   purpose).
