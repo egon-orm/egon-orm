@@ -47,6 +47,7 @@ import {
   type TestDatabaseHandle,
   User,
 } from "../../support/index.js";
+import { expectAllReturned } from "../../support/leaks.js";
 import type { MakePreloadAdapterOptions, PreloadConformanceProfile } from "./profile.js";
 
 export type { MakePreloadAdapterOptions, PreloadConformanceProfile } from "./profile.js";
@@ -168,7 +169,11 @@ export function runPreloadConformance(profile: PreloadConformanceProfile): void 
     });
 
     afterEach(async () => {
-      for (const each of adapters.splice(0)) await each.close();
+      for (const each of adapters.splice(0)) {
+        // Every connection a test checked out must be back by the time it ends.
+        await expectAllReturned(each);
+        await each.close();
+      }
     });
 
     afterAll(async () => {

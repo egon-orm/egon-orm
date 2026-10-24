@@ -38,13 +38,14 @@ import {
   success,
   t,
 } from "egon-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import {
   createTestDatabase,
   type TestDatabase,
   type TestDatabaseHandle,
   truncateAll,
 } from "../../support/index.js";
+import { expectAllReturned } from "../../support/leaks.js";
 import type { NestedConformanceProfile } from "./profile.js";
 
 export type { NestedConformanceProfile } from "./profile.js";
@@ -259,8 +260,15 @@ export function runNestedConformance(profile: NestedConformanceProfile): void {
     });
 
     beforeEach(async () => {
-      for (const each of adapters.splice(0)) await each.close();
       await truncateAll(db);
+    });
+
+    afterEach(async () => {
+      for (const each of adapters.splice(0)) {
+        // Every connection a test checked out must be back by the time it ends.
+        await expectAllReturned(each);
+        await each.close();
+      }
     });
 
     afterAll(async () => {

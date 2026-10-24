@@ -107,6 +107,14 @@ that has open connections (checked on Postgres and MySQL). A run that is interru
 of a later run finds them stale, or until `pnpm db:reset`. With `createTestDatabase` you call `drop()`
 yourself, in `afterAll`.
 
+Connections are checked at two levels. A suite that makes adapters waits, after each test,
+until every connection that test checked out is back in its pool (`expectAllReturned` from
+`leaks.ts`, or the same check written inline in the adapter, read and transaction suites).
+And the whole run fails if any test file ended with a connection checked out of any
+adapter's pool, or a caller still waiting for one: `leak-check.ts`, a setup file of the
+integration projects, records the pool of every adapter a file started, and the teardown in
+`global-setup.ts` reads the records and names each file that leaked.
+
 The proof that integration files really run concurrently without interfering is the pair
 `parallel-a.pair.ts` / `parallel-b.pair.ts`, which only pass when they overlap in time.
 `parallel.itest.ts` runs them in a nested Vitest process with exactly two workers, so
@@ -118,7 +126,8 @@ Test support (`packages/core/test/support`):
 |---|---|
 | `env.ts` | `connectionSettings(dialect)`, `connectionUrl`, `tier2Enabled` |
 | `db.ts` | `withDatabase`, `createTestDatabase`, `loadFixture`, `uniqueDatabaseName`, `parseDatabaseName` |
-| `sweep.ts`, `global-setup.ts` | `sweepTestDatabases`; the Vitest global setup that sweeps leaked databases |
+| `sweep.ts`, `global-setup.ts` | `sweepTestDatabases`; the Vitest global setup that sweeps leaked databases and fails the run on a leaked connection |
+| `leaks.ts`, `leak-check.ts` | `expectAllReturned(adapter)`; the setup file that records every adapter's pool for the leak check |
 | `truncate.ts` | `truncateAll(db, { except })` |
 | `sql.ts` | `expectSql(compiled).toMatchInlineSnapshot()`, `normalizeSql` |
 | `fixtures/blog.sql` | The reference blog schema (PostgreSQL DDL) |
