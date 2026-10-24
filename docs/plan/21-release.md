@@ -10,6 +10,13 @@
 > benchmark has not run yet. The soak test, mutation testing and the type-health checks on the
 > 200-schema project stay gates for `0.1.0`; they are not moved to the `1.0` gate.
 
+> **Owner decision, 2026-10-24** (readiness report, PR #76): the 50 ms per-expression
+> type-health budget excludes the one-time cost of the first query expression a program
+> checks. That expression also pays for resolving the library's types, a fixed cost per
+> program that moves to whichever query is checked first; it is measured and recorded on its
+> own, and every other expression must stay within 50 ms. The `1.0` gate is recorded under
+> [1.0 gate](#10-gate) below.
+
 ## Goal
 
 Decide, on evidence, that the library is ready for a public `0.1.0` (and what remains
@@ -25,7 +32,9 @@ before `1.0`), and make publishing a one-command, repeatable act.
   report (`@microsoft/api-extractor`) and commit it; from now on CI fails on unreviewed API changes.
 - **Type health.** Type-check time of `examples/blog` and of a synthetic 200-schema project
   (`tsc --extendedDiagnostics`); budget: no single query expression over 50 ms of check
-  time, instantiation counts recorded. Editor responsiveness check (tsserver completions in
+  time, not counting the first query expression a program checks, whose time includes the
+  one-time cost of resolving the library's types and is recorded on its own (owner
+  decision, 2026-10-24); instantiation counts recorded. Editor responsiveness check (tsserver completions in
   a `where` callback under 200 ms on the 200-schema project). These are compile-time
   measurements taken once during the audit and recorded in the report, not a CI timing gate
   (plan README §7). Test against the minimum supported TypeScript version and the latest,
@@ -99,9 +108,44 @@ named list first — and the proposed gate for `1.0`.
 - [ ] Soak, fault-injection and runtime-matrix results recorded; zero connection leaks.
 - [ ] Mutation score target met for the three core areas.
 - [ ] Type-health budgets met on `examples/blog` and the 200-schema project (50 ms per query
-  expression, completions under 200 ms), with instantiation counts recorded.
+  expression after the first one a program checks, which is recorded on its own; completions
+  under 200 ms), with instantiation counts recorded.
 - [ ] Release dry run succeeds end to end from a clean clone.
 - [ ] API report committed and enforced in CI.
+
+## 1.0 gate
+
+What must be true before `1.0`, from the readiness report's proposal
+(`status/21-audit.md` §8). Items 1, 2 and 3 are owner decisions (F4: 2026-10-22; the
+completions budget and the survivor triage: 2026-10-24); the others are the report's
+proposal. Each is checked the way the readiness report checked `0.1.0`: re-verified, with
+evidence.
+
+1. **F4 fixed:** `ConstraintError` and `DatabaseError` get a custom inspect that leaves out
+   `detail` and shows the cause on one line (`packages/postgres/test/secrets.itest.ts`
+   flips to `not.toContain`).
+2. **Editor completions under 200 ms** on the 200-schema project in every connected
+   topology (chain, tree, hub), measured with `scripts/type-health/measure.mjs`, and every
+   query expression within the 50 ms budget as defined above.
+3. **Query and compiler mutation survivors triaged one by one**, as the changeset area was
+   (#74), with a test for every real gap; Stryker re-run on all three areas at the `1.0`
+   candidate, each at 80% or more with no untriaged logic survivor.
+4. **Step 19 done:** the published benchmark run against the budgets of plan README §7.
+5. **Every advertised floor tested in CI:** Postgres 14 (or the floor then), MySQL 8.0.31,
+   the oldest supported SQLite, Node 22.12.0, TypeScript 5.8 and the peer lower bounds.
+6. **TypeScript:** the consumer checks pass on the TypeScript release current at `1.0`,
+   7.1 included if it has shipped, and the build has moved to TypeScript 7 or the decision
+   to stay is restated.
+7. **Branch protection enforced** (one approval, the `ci` check, squash merges only) for the
+   whole `1.0` cycle, and the weekly soak green for at least four consecutive weeks.
+8. **Release proven:** at least one real `0.x` release through the workflow, with provenance
+   and trusted publishing (no `NPM_TOKEN` left).
+9. **No advisory** in any published package's dependency tree, and fixed releases taken for
+   the development-only advisories.
+10. **Docs:** the site builds with zero warnings and fails on one; the remaining test gaps
+    of the readiness report (P13) closed; a fresh-eyes run recorded in the repository.
+11. **Support policy in force:** the six-month security window for the previous major
+    published in `SECURITY.md` and `upgrading.md`.
 
 ## Out of scope
 
