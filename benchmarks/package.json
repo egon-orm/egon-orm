@@ -12,6 +12,6 @@
   "dependencies": {
     "egon-orm": "workspace:*",
     "mitata": "1.0.34",
-    "zod": "4.6.5"
+    "zod": "4.6.7"
   }
 }

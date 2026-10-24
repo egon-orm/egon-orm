@@ -17,6 +17,8 @@ changesets, composable queries and a repo, typed end to end with no code generat
 modules only; a CommonJS project loads them with `require()`. Postgres 14 or later, SQLite
 3.39 or later, MySQL 8.0.31 or later
 ([supported versions](https://egon-orm.github.io/egon-orm/reference/upgrading#supported-versions)).
+`@egon-orm/zod` needs Zod 4.6.6 or later: earlier releases have a memory-exhaustion
+advisory (GHSA-mrhx-c7xc-m3w5).
 
 If you used the packages from this repository before this release, read
 [Upgrading to 0.1.0](https://egon-orm.github.io/egon-orm/reference/upgrading#_0-1-0): the

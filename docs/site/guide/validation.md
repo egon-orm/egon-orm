@@ -179,7 +179,7 @@ A function has no output, so `apply` is not available this way.
 ## Deriving Zod schemas from a schema class
 
 `@egon-orm/zod` builds a Zod schema from a schema class, so the shape is written once.
-It needs Zod 4.3 or later as a peer dependency.
+It needs Zod 4.6.6 or later as a peer dependency.
 
 <<< @/examples/validation.ts#to-zod
 

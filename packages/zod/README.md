@@ -13,7 +13,7 @@ fields twice.
 npm install egon-orm @egon-orm/zod zod
 ```
 
-`zod` 4.3 or later is a peer dependency.
+`zod` 4.6.6 or later is a peer dependency.
 
 ## Example
 

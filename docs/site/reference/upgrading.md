@@ -97,7 +97,7 @@ The drivers are peer dependencies, installed by you:
 | | `@types/pg` (optional, for TypeScript) | `^8.21.0` | 8.21.0 and the newest 8.x |
 | `@egon-orm/sqlite` | `better-sqlite3` | `^12.4.1 \|\| ^13.0.0` | 12.4.1 and the newest 13.x |
 | `@egon-orm/mysql` | `mysql2` | `^3.11.0` | 3.11.0 and the newest 3.x |
-| `@egon-orm/zod` | `zod` | `^4.3.0` | 4.3.0 and the newest 4.x |
+| `@egon-orm/zod` | `zod` | `^4.6.6` | 4.6.6 and the newest 4.x |
 
 TypeScript 5.8 is the minimum for ES module and CommonJS projects alike: it is the first
 release that types a `require()` of an ES module, which a CommonJS project does.
