@@ -89,8 +89,10 @@ since both list the exports renamed before 0.1.0, I added it there. Historical s
   statement in a query file, by trace timestamp, the one most runs agree on),
   `budget: { limitMs: 50, slowestAfterFirstMs, met }`, and `slowest` without the first one.
   "Query file": `queries-NN.ts` in the synthetic project (its `schemas-NN.ts` files only
-  declare schemas, and one of them is checked first of all, at about 22 ms), every file of
-  `src/` in `examples/blog`. Still a one-off measurement, not a CI gate.
+  declare schemas, and one of them is checked first of all, at about 22 ms); in
+  `examples/blog`, its four application files (`accounts`, `comments`, `posts`,
+  `publishing`), not `db.ts` (which makes the repo) or `schemas.ts` (review round 1). Still a
+  one-off measurement, not a CI gate.
 - Numbers: §4.1.
 
 ### 4.1 Measurements
@@ -102,12 +104,19 @@ about 100 (another build on the machine) gave times 3 to 4 times higher; it is d
 
 | Project | First query checked (median / max) | Slowest after it (median) | Budget (50 ms, after the first) | Completions after an edit (median / max) | Instantiations | Check time |
 |---|---|---|---|---|---|---|
-| `examples/blog` | `src/db.ts:6`: 9.1 / 9.2 ms | 32.1 ms (`src/accounts.ts:16`) | met | — | 48,563 | 0.19 s |
+| `examples/blog` | `src/accounts.ts:16`: 33.1 / 35.5 ms | 20.7 ms (`src/posts.ts:50`) | met | — | 48,563 | 0.19 s |
 | 200 schemas, tree | `queries-00.ts:4`: 53.0 / 54.4 ms | 21.8 ms (`schemas-10.ts:5`) | met | 240 / 381 ms | 401,512 | 2.41 s |
 | 200 schemas, chain | `queries-00.ts:4`: 60.4 / 61.8 ms | 24.1 ms (`queries-00.ts:18`) | met | 244 / 373 ms | 413,957 | 4.19 s |
 | 200 schemas, hub | `queries-00.ts:4`: 52.1 / 53.8 ms | 21.8 ms (`schemas-01.ts:4`) | met | 236 / 386 ms | 389,037 | 2.15 s |
 
-(The blog row is from the chain run; the tree and hub runs gave 32.2 and 31.6 ms.)
+(The blog row is from a chain run after review round 1, with the narrowed pattern; before
+it, `src/db.ts:6`, the `createRepo` call, was taken as the first, at 9.1 ms, and
+`accounts.ts:16` was the slowest after it, at 31.6 to 32.2 ms in three runs. The first
+statement the application files check, `accounts.ts:16`, is the registration changeset
+(`cast(...).validate(...)`), not a query builder statement.
+The budget is met either way: no blog statement reaches 50 ms. The synthetic rows are from
+the runs before the review; the chain re-run with the review's changes gave the same, 60.0 ms
+first and 24.3 ms after it.)
 
 - With the budget as now defined, **it is met** on `examples/blog` and on all three
   connected topologies of the 200-schema project. The first query checked costs 52 to 60
@@ -115,8 +124,8 @@ about 100 (another build on the machine) gave times 3 to 4 times higher; it is d
 - **Completions stay over 200 ms** (236 to 244 ms median) on the 200-schema project, as
   accepted for `0.1.0` (owner, 2026-10-22). That is now 1.0 gate item 2.
 - In the first chain run the blog's first query statement was not the same in all five
-  traces. I could not reproduce it: five later runs over three topologies all agreed on
-  `src/db.ts:6`. `measure.mjs` no longer throws on it. It leaves out the statement most runs
+  traces. I could not reproduce it: later runs over three topologies all agreed (on
+  `src/db.ts:6` with the earlier pattern, on `src/accounts.ts:16` with the narrowed one). `measure.mjs` no longer throws on it. It leaves out the statement most runs
   agree on, and lists each run's first statement (`firstCheckedByRun`) when they differ.
 
 ## 5. The leak check (box 11.5)
@@ -128,7 +137,9 @@ databases, and that the write, preload and nested conformance suites had no leak
 - **Global teardown.** Pools live in the test workers and the teardown runs in the main
   process, so they meet in a directory (`$TMPDIR/egon-leaks/<run id>`):
   - `packages/core/test/support/leak-check.ts`, a new setup file of every integration
-    project (the six package projects, `blog:integration`, `docs:integration`), registers
+    project (the six package projects, `blog:integration`, `docs:integration`, and the
+    nested pair runs `core:parallel-pair` and `core:sandbox-pair`, which inherit the outer
+    run's id and so report to its teardown; added in review round 1), registers
     every adapter a test file starts. Every adapter of the three dialect packages comes from
     `createAdapter`, and an adapter starts its pool in one place, the private `open`, on
     first use; the setup file wraps that method on the adapter class, in the worker only, to
@@ -153,7 +164,13 @@ databases, and that the write, preload and nested conformance suites had no leak
   as the adapter, read and transaction suites already did inline. In the nested suite the
   close moved from `beforeEach` to `afterEach` so that the check runs at the end of each
   test. Each was seen failing with a scratch test that acquired a connection (removed).
-- `CONTRIBUTING.md` describes both levels.
+- `CONTRIBUTING.md` describes both levels, and two limits of the run-wide check: a test
+  that leaks and then closes its adapter fails with a timeout (`close()` waits for the
+  connection) rather than the leak message, and a test file that never finishes writes no
+  record.
+- The pair runs were checked: a run of `parallel.itest.ts` and the Postgres transaction
+  conformance (which start the two pair runs) left records for all four pair files, the
+  sandbox pair's with their adapters' pools.
 - An observation, not a leak: after `close()`, the MySQL adapter's `poolStats()` still
   reports the closed pool's connections as idle (398 closed MySQL pools reported `size > 0,
   idle = size`). mysql2's `pool.end()` closes the sockets (checked: the server's process
@@ -169,8 +186,9 @@ minification" for two chunks:
 1. **The API page of `messages` (`egon-orm/messages`), 600 kB: fixed.** TypeDoc expanded
    the catalog's 654 entries into a "Type Declaration" section, a duplicate of the error
    reference (`reference/errors/`, generated from the same catalog). `typedoc-plugin.mjs`
-   now drops that declaration and adds a sentence linking to the error reference; the page
-   is a few kB. The plugin throws if the catalog is no longer an object export.
+   now drops that declaration, shows the catalog's type as the equivalent
+   `Record<ErrorId, string>` (with `ErrorId` linked; the plugin throws if an entry is not a
+   string), and adds a sentence linking to the error reference; the page is a few kB. The plugin throws if the catalog is no longer an object export.
 2. **The local search index, `@localSearchIndexroot`, 778 kB minified (190 kB gzip): not
    fixed.** It is one module, the serialized MiniSearch index of every non-API page (the
    API pages are already left out), loaded only when someone first opens the search box.
@@ -256,3 +274,21 @@ informational)`, which fails as it does on `main` (P7 of the report) and is outs
 
 - MySQL 8.0.31 through the compose service locally (only the same image by digest through
   `docker run`); CI runs the compose service.
+
+## Review round 1 (PR #77, approved)
+
+The reviewer's four minor findings:
+
+1. `typedoc-plugin.mjs`: the trimmed `messages` page showed `const messages: object`. It now
+   shows `const messages: Record<ErrorId, string>`, which is what the object literal is (one
+   `string` member per identifier, not `readonly`), and the added sentence no longer says
+   "and this text".
+2. `measure.mjs`: the blog's query files are now the four application files, so `db.ts:6`
+   (`createRepo`) is no longer taken as the first query; blog re-measured (§4.1). The
+   `startsWith` check now also applies to `firstCheckedByRun` (one `relative` helper).
+3. Leak-check limits documented in `CONTRIBUTING.md`. Covering the pair runs was cheap (a
+   setup file on the two pair projects), so they are covered instead of documented (§5).
+4. No action (squash merge).
+
+The search-index warning (item 6) is left as it was; the owner is deciding between (a), (b)
+and (c).

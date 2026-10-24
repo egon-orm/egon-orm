@@ -19,7 +19,8 @@
 // types, which moves to whichever query is checked first, so it is reported on its own
 // (`firstChecked`), and `slowest` and `budget` leave it out. In the synthetic project the
 // queries are in the `queries-NN.ts` files (the `schemas-NN.ts` files only declare schemas);
-// in examples/blog every file of `src/` has them.
+// in examples/blog they are in the four application files (accounts, comments, posts,
+// publishing); `db.ts` makes the repo and `schemas.ts` declares the schemas.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -148,11 +149,12 @@ function slowest(project, count, runs, queries) {
   const firstKey = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
   const agreed = firsts.every((key) => key === firstKey);
   const root = `${ROOT.toLowerCase()}/`;
+  const relative = (key) => (key.toLowerCase().startsWith(root) ? key.slice(root.length) : key);
   const rows = [];
   let firstChecked;
   for (const key of all[0].perLine.keys()) {
     const times = all.map(({ perLine }) => perLine.get(key) ?? 0).sort((a, b) => a - b);
-    const at = key.toLowerCase().startsWith(root) ? key.slice(root.length) : key;
+    const at = relative(key);
     const row = { at, medianMs: round(times[Math.floor(runs / 2)]), maxMs: round(times[runs - 1]) };
     if (key === firstKey) firstChecked = row;
     else rows.push(row);
@@ -163,7 +165,9 @@ function slowest(project, count, runs, queries) {
     statements: rows.length + (firstChecked === undefined ? 0 : 1),
     runs,
     firstChecked,
-    ...(agreed ? {} : { firstCheckedByRun: firsts.map((key) => key?.slice(root.length)) }),
+    ...(agreed
+      ? {}
+      : { firstCheckedByRun: firsts.map((key) => (key === undefined ? undefined : relative(key))) }),
     budget: { limitMs: BUDGET_MS, slowestAfterFirstMs: slowestMs, met: slowestMs <= BUDGET_MS },
     slowest: rows.slice(0, count),
   };
@@ -256,7 +260,10 @@ const results = { typescript: typescriptVersion, node: process.version, projects
 const completionsOnly = process.argv.includes("--completions-only");
 if (!completionsOnly) {
   const blog = blogProject();
-  results.projects["examples/blog"] = { ...diagnostics(blog), ...slowest(blog, 5, RUNS, /\/src\//) };
+  results.projects["examples/blog"] = {
+    ...diagnostics(blog),
+    ...slowest(blog, 5, RUNS, /\/src\/(?:accounts|comments|posts|publishing)\.ts$/),
+  };
 }
 const synthetic = join(TEMP, "synthetic");
 const ANNOTATE = process.argv.includes("--annotate-assocs");

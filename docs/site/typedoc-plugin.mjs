@@ -6,9 +6,10 @@
 //   validation, an error through `treatWarningsAsErrors`, covers the summary);
 // - leaves out the members of the `messages` catalog (`egon-orm/messages`), one entry per
 //   error identifier, which the error reference (reference/errors/, generated from the same
-//   catalog) already lists with the short message of each. Listed here too, they made a page
+//   catalog) already lists with the short message of each, and shows the catalog's type as
+//   the equivalent `Record<ErrorId, string>`. Listed here too, the entries made a page
 //   whose script was over Vite's 500 kB chunk-size warning.
-import { Converter, IntrinsicType, ReflectionKind, ReflectionType } from "typedoc";
+import { Converter, IntrinsicType, ReferenceType, ReflectionKind, ReflectionType } from "typedoc";
 
 /** Entry file (relative to the repository's `packages/`) -> the import specifier. */
 const MODULES = {
@@ -33,8 +34,9 @@ function hasExample(reflection) {
 }
 
 /**
- * Replaces the type of the `messages` catalog, an object literal with one member per error
- * identifier, by `object`, and says where the entries are listed.
+ * Replaces the type of the `messages` catalog, an object literal with one `string` member
+ * per error identifier, by the equivalent `Record<ErrorId, string>`, and says where the
+ * entries are listed.
  */
 function summariseCatalog(context) {
   const module = context.project
@@ -44,11 +46,29 @@ function summariseCatalog(context) {
   if (catalog === undefined || !(catalog.type instanceof ReflectionType)) {
     throw new Error("typedoc-plugin: egon-orm/messages no longer exports the messages catalog as an object");
   }
+  const members = catalog.type.declaration.children ?? [];
+  const notString = members.find(
+    (member) => !(member.type instanceof IntrinsicType && member.type.name === "string"),
+  );
+  if (notString !== undefined) {
+    throw new Error(
+      `typedoc-plugin: the catalog entry ${notString.name} is not a string; update summariseCatalog`,
+    );
+  }
+  const errorId = context.project
+    .getReflectionsByKind(ReflectionKind.TypeAlias)
+    .find((each) => each.name === "ErrorId" && each.parent?.name === "egon-orm");
+  if (errorId === undefined) throw new Error("typedoc-plugin: egon-orm no longer exports ErrorId");
   context.project.removeReflection(catalog.type.declaration);
-  catalog.type = new IntrinsicType("object");
+  const record = ReferenceType.createBrokenReference("Record", context.project, "typescript");
+  record.typeArguments = [
+    ReferenceType.createResolvedReference("ErrorId", errorId, context.project),
+    new IntrinsicType("string"),
+  ];
+  catalog.type = record;
   catalog.comment?.summary.push({
     kind: "text",
-    text: "\n\nOne entry per error identifier (`ErrorId`); the [error reference](/reference/errors) lists each one with its short message and this text.",
+    text: "\n\nIt has one entry per error identifier. The [error reference](/reference/errors) lists them all, each with its short message and its full text from this catalog.",
   });
 }
 

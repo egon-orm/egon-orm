@@ -113,7 +113,12 @@ until every connection that test checked out is back in its pool (`expectAllRetu
 And the whole run fails if any test file ended with a connection checked out of any
 adapter's pool, or a caller still waiting for one: `leak-check.ts`, a setup file of the
 integration projects, records the pool of every adapter a file started, and the teardown in
-`global-setup.ts` reads the records and names each file that leaked.
+`global-setup.ts` reads the records and names each file that leaked. The nested runs of
+the pair files (`core:parallel-pair`, `core:sandbox-pair`) report to the run that started
+them. Two limits: a test that leaks a connection and then closes its adapter does not reach
+the leak message, because `close()` waits for the connection to come back, so it fails with
+a timeout instead (the test's 30 s, or 60 s in a hook); and a test file that never finishes
+(a crashed worker) writes no record.
 
 The proof that integration files really run concurrently without interfering is the pair
 `parallel-a.pair.ts` / `parallel-b.pair.ts`, which only pass when they overlap in time.
