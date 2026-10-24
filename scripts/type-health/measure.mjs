@@ -161,6 +161,7 @@ function slowest(project, count, runs, queries) {
   }
   rows.sort((a, b) => b.medianMs - a.medianMs);
   const slowestMs = rows[0]?.medianMs ?? 0;
+  const slowestIncludingFirst = Math.max(slowestMs, firstChecked?.medianMs ?? 0);
   return {
     statements: rows.length + (firstChecked === undefined ? 0 : 1),
     runs,
@@ -168,7 +169,15 @@ function slowest(project, count, runs, queries) {
     ...(agreed
       ? {}
       : { firstCheckedByRun: firsts.map((key) => (key === undefined ? undefined : relative(key))) }),
-    budget: { limitMs: BUDGET_MS, slowestAfterFirstMs: slowestMs, met: slowestMs <= BUDGET_MS },
+    budget: {
+      limitMs: BUDGET_MS,
+      slowestAfterFirstMs: slowestMs,
+      met: slowestMs <= BUDGET_MS,
+      // The same with the first query statement counted, to show whether the project would
+      // meet the budget without the exclusion.
+      slowestIncludingFirstMs: slowestIncludingFirst,
+      metIncludingFirst: slowestIncludingFirst <= BUDGET_MS,
+    },
     slowest: rows.slice(0, count),
   };
 }

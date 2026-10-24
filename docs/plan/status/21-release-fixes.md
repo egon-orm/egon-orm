@@ -187,8 +187,11 @@ minification" for two chunks:
    the catalog's 654 entries into a "Type Declaration" section, a duplicate of the error
    reference (`reference/errors/`, generated from the same catalog). `typedoc-plugin.mjs`
    now drops that declaration, shows the catalog's type as the equivalent
-   `Record<ErrorId, string>` (with `ErrorId` linked; the plugin throws if an entry is not a
-   string), and adds a sentence linking to the error reference; the page is a few kB. The plugin throws if the catalog is no longer an object export.
+   `Record<ErrorId, string>`, and adds a sentence linking to the error reference; the page
+   is a few kB. `ErrorId` is not a link on the page: the API reference renders declarations
+   as plain code blocks (`useCodeBlocks`), which hold no links. The plugin throws if the
+   catalog is no longer an object export, if an entry is not a string, or if `egon-orm` no
+   longer exports `ErrorId`.
 2. **The local search index, `@localSearchIndexroot`, 778 kB minified (190 kB gzip): not
    fixed.** It is one module, the serialized MiniSearch index of every non-API page (the
    API pages are already left out), loaded only when someone first opens the search box.
@@ -289,6 +292,14 @@ The reviewer's four minor findings:
 3. Leak-check limits documented in `CONTRIBUTING.md`. Covering the pair runs was cheap (a
    setup file on the two pair projects), so they are covered instead of documented (§5).
 4. No action (squash merge).
+
+## Review round 2 (PR #77, approved)
+
+1. `measure.mjs`'s `budget` also gives `slowestIncludingFirstMs` and `metIncludingFirst`,
+   the slowest statement with the first query counted. A project that meets 50 ms without
+   the exclusion shows it in the output. Re-measured (chain run): the blog gives `slowestIncludingFirstMs` 31.6 (`accounts.ts:16`), `metIncludingFirst: true`, and 20.3 ms after the first; the 200-schema chain gives 59.1 ms, `metIncludingFirst: false`, and 23.9 ms after the first, `met: true`.
+2. §6 claimed `ErrorId` is linked on the generated `messages` page. It is not: the page
+   shows the type in a plain code block, as every API page does. The claim is corrected.
 
 The search-index warning (item 6) is left as it was; the owner is deciding between (a), (b)
 and (c).
