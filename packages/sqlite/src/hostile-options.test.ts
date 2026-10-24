@@ -1,7 +1,8 @@
 // Options read as own properties only (owner decision, 2026-10-24): a key planted on
 // Object.prototype is never taken as an option. See also
 // packages/core/test/security/hostile-params.test.ts.
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { SQLITE_RUNTIME } from "./driver.js";
 import { resolveOptions } from "./options.js";
 
 /** Removes what a test put on Object.prototype. */
@@ -24,6 +25,21 @@ describe("a key planted on Object.prototype is no option of sqlite()", () => {
     plant("readonly", true);
     plant("attach", { audit: "audit.db" });
     expect(resolveOptions({ filename: ":memory:" })).toMatchObject({ readonly: false, attach: [] });
+  });
+
+  test("better-sqlite3 gets no planted verbose, nativeBinding, readOnly or memory", () => {
+    const verbose = vi.fn();
+    plant("verbose", verbose);
+    plant("nativeBinding", "/nonexistent/planted-addon");
+    plant("readOnly", true);
+    plant("memory", true);
+    const handle = SQLITE_RUNTIME.open(resolveOptions({ filename: ":memory:" }));
+    try {
+      expect(handle.prepare("select 1 as one").get()).toEqual({ one: 1 });
+    } finally {
+      handle.close();
+    }
+    expect(verbose).not.toHaveBeenCalled();
   });
 
   test("a planted filename does not stand in for a missing one", () => {

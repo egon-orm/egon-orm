@@ -152,6 +152,11 @@ function checkName(method: string, name: unknown): string {
   if (typeof name !== "string" || name.length === 0) {
     throw new TypeError(`batch.${method}(name, …): the step name must be a non-empty string.`);
   }
+  // Results are kept on plain objects under their step's name: a step named __proto__ would
+  // replace the prototype of the results instead of holding a result.
+  if (name === "__proto__") {
+    throw new QueryError("query.batchStepName", `batch.${method}(): a step cannot be named "__proto__".`);
+  }
   return name;
 }
 

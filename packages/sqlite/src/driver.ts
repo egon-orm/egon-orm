@@ -73,9 +73,36 @@ export const SQLITE_RUNTIME: SqliteRuntime = {
     const load = requireFor(import.meta.url, typeof require === "function" ? require : undefined);
     const manifest = load?.("better-sqlite3/package.json") as { version?: unknown } | undefined;
     if (typeof manifest?.version === "string") checkRuntime(manifest.version, process.versions.napi);
-    return new Database(settings.filename, { readonly: settings.readonly });
+    return new Database(settings.filename, databaseOptions(settings));
   },
 };
+
+/**
+ * The options of `new Database(filename, options)`. better-sqlite3 tests each option with
+ * `in` (checked against better-sqlite3 12.11.1, `lib/database.js` and `lib/util.js`), so an
+ * option planted on `Object.prototype` would reach it: `nativeBinding` loads a native
+ * addon, `verbose` is handed every statement. The object has no prototype, and every key
+ * that version reads is set as an own property, with the driver's own default where Egon has
+ * no value (owner decision, 2026-10-24). `readOnly` and `memory`, which it reads only to
+ * refuse them, are left out: without a prototype they are absent.
+ *
+ * @example
+ * ```ts
+ * databaseOptions({ filename: ":memory:", readonly: false, pragmas: [], attach: [] });
+ * // { readonly: false, fileMustExist: false, timeout: 5000, verbose: null, nativeBinding: null }
+ * ```
+ */
+export function databaseOptions(settings: OpenSettings): Database.Options {
+  const options = Object.create(null) as {
+    -readonly [K in keyof Database.Options]-?: Database.Options[K] | null;
+  };
+  options.readonly = settings.readonly;
+  options.fileMustExist = false;
+  options.timeout = 5000;
+  options.verbose = null;
+  options.nativeBinding = null;
+  return options as Database.Options;
+}
 
 const EMPTY_ROWS: readonly Record<string, unknown>[] = /* @__PURE__ */ Object.freeze([]);
 

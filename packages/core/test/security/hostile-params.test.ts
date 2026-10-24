@@ -29,6 +29,7 @@ import {
   hasMany,
   hasOne,
   meta,
+  param,
   Schema,
   t,
   timestamps,
@@ -36,6 +37,8 @@ import {
 import { defineMigration } from "../../src/migration/define.js";
 import { createMigrator } from "../../src/migration/migrator.js";
 import { fakeDatabase, sqlOf } from "../../src/migration/test-helpers.js";
+import { copyValue } from "../../src/repo/preload.js";
+import { dumpEmbedded } from "../../src/types/embed.js";
 
 /** A row as the database would return it, with `assocs` loaded. */
 function loaded<S extends AnySchema>(
@@ -118,6 +121,25 @@ describe("prototype pollution", () => {
     expect(Object.getPrototypeOf(again.params)).toBe(Object.prototype);
     expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
     expect(JSON.stringify(cs)).not.toContain("admin");
+  });
+
+  test("a __proto__ key of JSON data stays a key when an embed is stored or a preload copied", () => {
+    class Doc extends EmbeddedSchema({ data: t.json() }) {}
+    const parsed = JSON.parse('{"__proto__": {"admin": true}, "a": 1}') as object;
+    for (const copy of [
+      (dumpEmbedded(meta(Doc), { data: parsed }) as { data: object }).data,
+      copyValue(parsed) as object,
+    ]) {
+      expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+      expect(Object.hasOwn(copy, "__proto__")).toBe(true);
+      expect((copy as { admin?: unknown }).admin).toBeUndefined();
+    }
+  });
+
+  test("a binding alias or a named parameter cannot be __proto__: they key one object", () => {
+    expect(() => from(User, "__proto__")).toThrow(expect.objectContaining({ id: "query.aliasProto" }));
+    expect(() => from(User, "u").join(Post, "__proto__", ({ u }) => u.id.eq(1))).toThrow(QueryError);
+    expect(() => param("__proto__", t.integer())).toThrow(expect.objectContaining({ id: "query.paramName" }));
   });
 
   test("a permitted name that is not a field is refused, prototype members included", () => {

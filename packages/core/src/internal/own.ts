@@ -40,3 +40,24 @@ export function own<O extends object, K extends keyof O>(
 export function frozenOptions<T extends object>(values: T): Readonly<T> {
   return Object.freeze(Object.assign(Object.create(null) as T, values));
 }
+
+/**
+ * Assigns `out[key] = value` as an own property, also for the key `"__proto__"` (which
+ * `JSON.parse` produces as an ordinary own key): a plain assignment would replace the
+ * object's prototype instead, dropping the key.
+ *
+ * @example
+ * ```ts
+ * const out: Record<string, unknown> = {};
+ * setOwn(out, "__proto__", { admin: true });
+ * Object.getPrototypeOf(out) === Object.prototype; // true
+ * Object.hasOwn(out, "__proto__"); // true
+ * ```
+ */
+export function setOwn(out: Record<string, unknown>, key: string, value: unknown): void {
+  if (key === "__proto__") {
+    Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
+  } else {
+    out[key] = value;
+  }
+}

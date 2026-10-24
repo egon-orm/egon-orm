@@ -173,6 +173,8 @@ export const messages = {
   "query.aggregateUnknown": "Use the aggregates the query builder offers, or write the call as a fragment.",
   "query.aggregateUnknownColumn": "Aggregate a stored field of the schema; a virtual field has no column.",
   "query.aliasMissing": 'Give the binding an alias, a non-empty string: {{clause}}(User, "u").',
+  "query.aliasProto":
+    "Choose another alias: the bindings are passed to callbacks as one object keyed by alias.",
   "query.aliasReserved":
     'Aliases that start with "$" are reserved for the bindings the builder adds itself; choose another.',
   "query.aliasTaken": "Each binding needs its own alias; for a self-join, give the second one another name.",
@@ -244,6 +246,7 @@ export const messages = {
     "The query tree is malformed: queries built with from() and the builder methods never produce this, a tree built or changed by hand can. If it came from the builder, please report it.",
   "query.astWindowName":
     "The query tree is malformed: windows() refuses such names when it is called, so this one was changed afterwards.",
+  "query.batchStepName": "Choose another name for the step: its result is kept under it.",
   "query.batchStepTwice": "Step names are unique: their results are kept under them.",
   "query.booleanArguments": "Pass boolean expressions, such as u.age.gte(18).",
   "query.booleanExpected": "Pass a boolean expression, such as u.age.gte(18), or true or false.",
@@ -522,6 +525,7 @@ export const messages = {
     'Declare the window with windows({ w: ({ p }) => ({ partitionBy: [p.authorId] }) }) and pass its name, over("w"), or pass the window itself.',
   "query.overTwice": "Call over() once per aggregate; declare the window with all its parts in that call.",
   "query.paramArguments": 'Pass a name and a field type, as in param("minAge", t.integer()).',
+  "query.paramName": "Choose another name: the values are passed as one object keyed by name.",
   "query.paramNotWholeNumber": "Give a fraction a float type, val(2.5, t.float()), or round it.",
   "query.paramsMissing": "Pass a value for every named parameter, as in repo.all(q, { {{name}}: … }).",
   "query.paramsUnknown": "Pass only the named parameters the query declares with param().",

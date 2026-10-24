@@ -920,6 +920,11 @@ function checkAlias(scope: Scope | undefined, alias: unknown, clause: string): s
   if (alias.startsWith("$")) {
     throw new QueryError("query.aliasReserved", `${clause}() was given the alias "${alias}".`);
   }
+  // The bindings are passed to callbacks as one object, keyed by alias: this one would
+  // replace that object's prototype.
+  if (alias === "__proto__") {
+    throw new QueryError("query.aliasProto", `${clause}(): a binding cannot be named "__proto__".`);
+  }
   if (scope !== undefined) {
     const taken = findEntry(scope, alias);
     if (taken !== undefined) {

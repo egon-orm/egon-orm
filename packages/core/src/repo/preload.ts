@@ -55,7 +55,7 @@ import type {
 import type { AnySchema, FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { ROW } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
-import { own } from "../internal/own.js";
+import { own, setOwn } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { type AssocRoute, checkRows, KeyIndex, rebuild, routeOf, schemaOfRow } from "../query/assoc.js";
 import {
@@ -1423,7 +1423,9 @@ export function copyValue(value: unknown): unknown {
   if (isRow(value)) return copyRow(value);
   if (isPlainObject(value)) {
     const out: Record<string, unknown> = {};
-    for (const key of Object.keys(value)) out[key] = copyValue((value as Record<string, unknown>)[key]);
+    // A `__proto__` key of JSON data stays a key: a plain assignment would set the prototype.
+    for (const key of Object.keys(value))
+      setOwn(out, key, copyValue((value as Record<string, unknown>)[key]));
     return out;
   }
   return value;

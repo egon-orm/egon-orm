@@ -945,6 +945,10 @@ export function param<const N extends string, T, F extends FieldFlags>(
   if (typeof name !== "string" || name === "") {
     throw new QueryError("query.paramArguments", "param() takes a name and a field type.");
   }
+  // Values are passed as one object, keyed by name: this one would replace its prototype.
+  if (name === "__proto__") {
+    throw new QueryError("query.paramName", 'param(): a named parameter cannot be named "__proto__".');
+  }
   const fieldType = typeArgument(type, "param");
   const node = namedParamNode(name, fieldType, false);
   // Whether the value may be null is part of the parameter's type, like the field type.

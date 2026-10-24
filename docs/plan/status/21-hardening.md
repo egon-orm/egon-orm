@@ -9,7 +9,7 @@ Owner decisions of 2026-10-24 (all three in one PR). Input: the Requests of
 | Item | Result |
 |---|---|
 | 1. Duplicate field names | **Done.** A name listed twice in `cast`'s permitted list, `validateRequired`, `uniqueConstraint`, `validateUniqueAsync`, or a repo write's `returning` / `onConflict` lists counts once. Tests fail without the fix. |
-| 2. Inherited option keys | **Done** for every read Egon itself makes, in all six packages. One rule: options are read with `own(options, key)` (an `Object.hasOwn` read), and option defaults are frozen objects without a prototype. 42 tests (31 in core, 11 in the other packages) plant a key on `Object.prototype`; each was checked to fail without its fix. **One open question for the owner** (below): what the database drivers read from the configuration objects Egon builds for them. |
+| 2. Inherited option keys | **Done** for every read Egon itself makes, in all six packages. One rule: options are read with `own(options, key)` (an `Object.hasOwn` read), and option defaults are frozen objects without a prototype. 43 tests (31 in core, 12 in the other packages) plant a key on `Object.prototype`; each was checked to fail without its fix. The drivers: SQLite is covered, pg and mysql2 are left to the drivers (owner decision, below). |
 | 3. Seeded property tests in mutation runs | **Done.** `packages/core/test/support/mutation-seed.ts`, used only by `vitest.mutation.config.ts`. Normal runs stay unseeded (checked). Two Stryker runs of one file: see §3. |
 
 ## 1. Duplicate field names
@@ -309,29 +309,62 @@ requires.
   them would not be caught by a test.
 - No performance measurement (step 19).
 
-## Needs the owner's decision
+## Owner decisions (resolved)
 
-- **What the database drivers read from the configuration Egon gives them.** Egon builds
-  the configuration objects it hands to `pg.Pool`, `mysql2.createPool`, the
-  `better-sqlite3` constructor and `tls.connect`, and those libraries read keys Egon does
-  not set: pg reads an inherited `ssl` when none was given (and pg-pool `Client`,
-  `Promise`, `log`, `onConnect`, `verify`); better-sqlite3 tests its options with `in`,
-  including `nativeBinding` (which loads a native addon) and `verbose` (which receives every
-  statement); mysql2 reads `stream`, `infileStreamFactory`, `authPlugins`, `typeCast` and
-  more. A key planted on `Object.prototype` reaches these drivers even though Egon itself
-  no longer reads it. Options: (a) leave it to the drivers (documented in `SECURITY.md`,
-  as this PR does); (b) give each driver a configuration in which every key the driver
-  reads is set, as an own property (with `undefined` where we have nothing), which depends
-  on each driver's version and has to be kept up to date; (c) a null-prototype
-  configuration, which helps where the driver uses the object as it is (better-sqlite3)
-  but not where it copies it into a plain object first (pg-pool). This PR does (a) only,
-  and does not choose: **the owner's call.** My recommendation: (b) for better-sqlite3's
-  short list (`nativeBinding`, `verbose`, `timeout`, `fileMustExist`, `memory`,
-  `readOnly`), and (a) for pg and mysql2, whose lists are long and change between releases.
+Both raised in the first version of this note; the owner approved both recommendations on
+2026-10-24.
 
+- **What the database drivers read from the configuration Egon gives them.** Raised
+  because pg, pg-pool, mysql2 and better-sqlite3 read keys of the configuration Egon builds
+  that Egon does not set, so a key planted on `Object.prototype` reached them (pg an
+  inherited `ssl`; better-sqlite3 `nativeBinding`, which loads a native addon, and
+  `verbose`, which receives every statement; mysql2 `stream`, `typeCast` and more).
+  **Decision:** better-sqlite3 is covered, pg / pg-pool and mysql2 are left to the
+  drivers.
+  - `packages/sqlite/src/driver.ts` `databaseOptions()`: the options of
+    `new Database(…)` are an object without a prototype with every key better-sqlite3
+    12.11.1 reads (`lib/database.js`, `lib/util.js`) set as an own property: `readonly`
+    (the caller's), `fileMustExist: false`, `timeout: 5000`, `verbose: null`,
+    `nativeBinding: null` (its own defaults). `readOnly` and `memory`, which it reads only
+    to refuse them, are absent (no prototype). The peer range also allows 13.x; a key a
+    later version reads with `in` is absent too, for the same reason.
+  - Test (`packages/sqlite/src/hostile-options.test.ts`): with `verbose` (a spy),
+    `nativeBinding` (a path that does not exist), `readOnly` and `memory` planted, a
+    database opens and runs a statement, and the spy is never called. Against the old
+    `{ readonly }` options it fails; checked separately for `verbose` alone (the spy is
+    called) and `nativeBinding` alone (the addon load throws).
+  - `SECURITY.md`: the prototype-pollution row says SQLite is covered and pg and mysql2
+    are left to the drivers.
+- **Batch step named `__proto__`** (was a Request). **Decision:** refused when the batch
+  is built.
+  - `checkName` in `packages/core/src/batch/batch.ts` throws `QueryError`
+    `query.batchStepName` (catalog entry added; error pages regenerated). A step of that
+    name stored its result with `results[key] = …` on a plain object, which replaced the
+    results' prototype. Test: `batch/batch.test.ts` ("a step named __proto__ is a
+    QueryError when the batch is built"), which fails against the original `batch.ts`.
+  - **The same pattern elsewhere** (every `obj[name] = …` in `packages/*/src` read):
+    - Fixed, data: `jsonOf` in `types/embed.ts` (storing an embed with a JSON field) and
+      `copyValue` in `repo/preload.ts` (copying a preloaded row taken twice) copied plain
+      objects with `out[key] = …`. A `__proto__` key that `JSON.parse` made (request data
+      or a stored document) set the copy's prototype and dropped the key. Now
+      `setOwn()` (`internal/own.ts`), as `schema/json.ts` and `internal/inspect.ts` already
+      did. Test in `hostile-params.test.ts`, checked to fail for each file reverted alone.
+    - Fixed, names: a binding alias `__proto__` (`from`, `join`: `query.aliasProto`) and a
+      `param("__proto__", …)` name (`query.paramName`). The bindings are passed to callbacks
+      as one object keyed by alias, and named values are collected by name with
+      `used[name] = …`; both would have replaced that object's prototype. Test in
+      `hostile-params.test.ts`; it fails against the original builder (the alias assertion
+      comes first, so the `param` half was not shown failing on its own).
+    - Not exploitable, left: field and embed names (a schema field cannot be named
+      `__proto__`), select and `.set()` maps (built with
+      the `__proto__` handling of `hydrate.ts` or read with `Object.keys` into
+      positions), error keys (`checkErrorKey` refuses `__proto__`), positions and
+      library-built tables, `placeholders` and named values (read only after `hasOwn`, by
+      names the query declared), the SQLite driver's row conversion (keys are the
+      statement's column names).
+    - Developer-chosen, not changed and not checked further: association names written
+      onto rows by preload (`source[node.assoc] = …`; they are static members of the schema
+      class), and `timestamps({ createdAt: "__proto__" })`.
 ## Requests
 
-- **Batch step named `__proto__`** (another part, not fixed): `checkName` in
-  `packages/core/src/batch/batch.ts` does not refuse `"__proto__"`, and step results are
-  stored with `results[key] = …` on plain objects, so a step of that name with an object
-  result replaces the results object's prototype. Found by the audit.
+None open. (The batch step named `__proto__` is resolved above.)
