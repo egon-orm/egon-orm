@@ -36,7 +36,7 @@ protocol and the pull request and review loop that every change follows.
 | `pnpm docs:dev` / `pnpm docs:build` | VitePress site in `docs/site`; both generate the API reference first (`pnpm docs:api`) |
 | `pnpm docs:check` | The documentation checks (part of `pnpm lint`): see [Documentation](#documentation) |
 | `pnpm docs:exports` / `pnpm docs:dialects` | Regenerate `reference/exports.md` / `reference/dialect-support.md` |
-| `pnpm db:up` / `db:down` / `db:reset` | Start / stop / recreate Postgres (`db:up:tier2` adds MySQL) |
+| `pnpm db:up` / `db:down` / `db:reset` | Start / stop / recreate Postgres (`db:up:tier2` adds MySQL; `db:up:floors` starts Postgres 14 and MySQL 8.0.31) |
 | `pnpm changeset` | Add a release note for a change to a published package |
 
 To run one Vitest project or file:
@@ -140,6 +140,11 @@ Test support (`packages/core/test/support`):
 loopback interface only. Data lives on tmpfs and is discarded when the containers stop. To point the tests elsewhere, set `EGON_PG_HOST`,
 `EGON_PG_PORT`, `EGON_PG_USER`, `EGON_PG_PASSWORD`, `EGON_PG_DATABASE` (and the
 `EGON_MYSQL_*` equivalents). MySQL tests run only with `EGON_TEST_TIER2=1`.
+
+The `floors` profile (`pnpm db:up:floors`) starts the oldest supported releases, Postgres 14
+on **127.0.0.1:54314** and MySQL 8.0.31 on **127.0.0.1:33031**, pinned by digest, for the
+`integration (database floors)` CI job. Run the suites against them with
+`EGON_TEST_TIER2=1 EGON_PG_PORT=54314 EGON_MYSQL_PORT=33031 pnpm test:integration`.
 
 ## Code rules the tools enforce
 

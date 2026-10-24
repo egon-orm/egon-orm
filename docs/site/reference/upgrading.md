@@ -84,9 +84,9 @@ vulnerability is in
 | TypeScript | 5.8 or later (owner decision, 2026-10-22) | the newest 5.8.x, the latest release and 6.0 (the workspace's version), with the consumer checks |
 | Module formats | ES modules; CommonJS through `require()` of the ES modules (Node.js 22.12 or later) | both, from installed packages |
 | TypeScript `moduleResolution` | `nodenext`, `node16`, `bundler` | all three, and a CommonJS file under `nodenext` |
-| PostgreSQL | 14 or later | 16 |
+| PostgreSQL | 14 or later | 14 (the floor) and 16 |
 | SQLite | 3.39 or later (the one `better-sqlite3` bundles) | the bundled one |
-| MySQL | 8.0.31 or later | 8.4 |
+| MySQL | 8.0.31 or later | 8.0.31 (the floor) and 8.4 |
 
 The drivers are peer dependencies, installed by you:
 
