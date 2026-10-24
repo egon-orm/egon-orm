@@ -80,7 +80,8 @@ at the time of the audit; these decisions supersede it where they differ.
 - **P6:** accepted. `0.1.0` ships with the query and compiler survivors sampled; triaging
   them one by one is a 1.0 gate.
 - **Database floors (P3):** CI jobs for Postgres 14 and MySQL 8.0.31 before `0.1.0`, in the
-  follow-up PR.
+  follow-up PR. This follows the coordinator's recommendation, which the owner answered, and
+  is stricter than this report's (a Postgres 14 job before 1.0, "tested on 16" for `0.1.0`).
 - **1.0 gate:** completions under 200 ms and the query and compiler triage are added
   (§8 items 2 and 3).
 - **`ErrorMessagesOf`** is renamed to `ErrorMessages` before `0.1.0`, in the follow-up PR.
@@ -121,8 +122,8 @@ Not run, by the rules of this part: a full Stryker area run, any benchmark, the
 |---|---|---|
 | Types, schema (steps 03, 04) | **Ready** | §6 steps 03–04: all boxes verified (two with caveats about test form); `pnpm check` |
 | Changesets and validators (05, 06, 15) | **Ready** | §6; changeset mutation survivors triaged one by one ([#74](https://github.com/egon-orm/egon-orm/pull/74)), score 88.14%; duplicate names and own-key reads fixed ([#75](https://github.com/egon-orm/egon-orm/pull/75)) |
-| Query builder and expressions (07–09) | **Ready with caveats** (P6 acceptance pending) | §6; mutation 83.46%; survivors sampled, not triaged one by one (owner decision 4, 2026-10-23): about 106 (42–237) untested estimated (§4.3) |
-| SQL compiler (10) | **Ready with caveats** (P6 acceptance pending) | §6; injection property on all three dialects (10,000 runs in CI, 100,000 once in 21-security); mutation 93.04%; survivors sampled, not triaged (owner decision 4): about 35 (14–78) estimated gaps |
+| Query builder and expressions (07–09) | **Ready with caveats** (P6 accepted 2026-10-24) | §6; mutation 83.46%; survivors sampled, not triaged one by one (owner decision 4, 2026-10-23): about 106 (42–237) untested estimated (§4.3) |
+| SQL compiler (10) | **Ready with caveats** (P6 accepted 2026-10-24) | §6; injection property on all three dialects (10,000 runs in CI, 100,000 once in 21-security); mutation 93.04%; survivors sampled, not triaged (owner decision 4): about 35 (14–78) estimated gaps |
 | Adapter, repo reads and writes (11–13) | **Ready with caveats** | §6; my integration run; Postgres 14 claimed but untested (P3); the "global teardown" leak box is false as worded (P10), covered in practice by fault injection and the soak |
 | Associations, transactions, Batch (14, 16) | **Ready** | §6; seams tests (`packages/postgres/test/seams.itest.ts`) in my integration run |
 | Dialects: SQLite, MySQL (17) | **Ready with caveats** | §6; tier-2 integration passes; "CI jobs required" is false (no branch protection, P0) |
