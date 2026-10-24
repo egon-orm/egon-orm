@@ -140,10 +140,13 @@ function summary(times) {
  */
 function slowest(project, count, runs, queries) {
   const all = Array.from({ length: runs }, (_, run) => tracedRun(project, run, queries));
-  const firstKey = all[0].first;
-  if (all.some((each) => each.first !== firstKey)) {
-    throw new Error(`the first query statement checked differs between runs of ${project}`);
-  }
+  // The first query statement of each run; the one most runs agree on is left out of the
+  // budget. A run that disagrees is reported (`firstCheckedByRun`) rather than hidden.
+  const firsts = all.map((each) => each.first);
+  const votes = new Map();
+  for (const key of firsts) votes.set(key, (votes.get(key) ?? 0) + 1);
+  const firstKey = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const agreed = firsts.every((key) => key === firstKey);
   const root = `${ROOT.toLowerCase()}/`;
   const rows = [];
   let firstChecked;
@@ -160,6 +163,7 @@ function slowest(project, count, runs, queries) {
     statements: rows.length + (firstChecked === undefined ? 0 : 1),
     runs,
     firstChecked,
+    ...(agreed ? {} : { firstCheckedByRun: firsts.map((key) => key?.slice(root.length)) }),
     budget: { limitMs: BUDGET_MS, slowestAfterFirstMs: slowestMs, met: slowestMs <= BUDGET_MS },
     slowest: rows.slice(0, count),
   };
