@@ -70,7 +70,7 @@ of the migration builder, and the migration builders' `context` and `added`).
 - Every options read Egon makes is of own properties only: a key planted on
   `Object.prototype` is never taken as an option, and neither are the library's defaults'
   inherited keys. What the `pg` and `mysql2` drivers read from their own configuration is
-  left to them ([SECURITY.md](./SECURITY.md)).
+  left to them ([SECURITY.md](https://github.com/egon-orm/egon-orm/blob/main/SECURITY.md)).
 - A date given as `{ year, month, day }` and an embedded value given as an object read
   only their own properties: `{}` is a cast error for a date, and a missing embedded field
   takes its default, whatever `Object.prototype` holds.
