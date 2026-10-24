@@ -1,6 +1,6 @@
 # Step 21 (audit): readiness report for 0.1.0, status
 
-Branch `step/21-audit`, 2026-10-24, from `main` at `c2088d6` (#75). Spec:
+Branch `step/21-audit`, 2026-10-24, from `main` at `c2088d6` ([#75](https://github.com/egon-orm/egon-orm/pull/75)). Spec:
 `docs/plan/21-release.md` §5 and Acceptance. This part writes the report and changes nothing
 else: findings are reported here, ranked, and not fixed.
 
@@ -44,13 +44,19 @@ What must happen before the first publish (§9, §10):
    cap for embedded lists (`packages/zod/src/to-zod.ts:226`). The repository's own Zod pins
    are 4.6.5. Fix: peer floor `^4.6.6`, pins to 4.6.7 (both releases are 12 or more days
    old). This is a public peer-range change, so it is listed for the owner's decision.
+3. **P11 (Medium): the 50 ms per-expression budget is not met, and only the completions miss
+   was accepted.** The first expression checked in the 200-schema project takes 53–55 ms (I
+   measured 55.2 ms, median of 3; the reviewer of this report 53–55 ms); every other one is
+   at most about 29 ms. Type health stays a `0.1.0` gate (owner, 2026-10-22), so the owner
+   must decide: accept the miss for `0.1.0`, or define the budget so that it excludes the
+   one-time cost of the first expression a program checks (§4.2, §10).
 
 Should be done before `0.1.0`, not blocking: say "tested on 16" next to "Postgres 14 or later"
 everywhere it is claimed, or add a Postgres 14 job (P2); update the "under construction,
 nothing is published" wording at release (P10).
 
 Not met and accepted by the owner: the 200 ms completions budget on large connected models
-(§4.2). Not run: step 19 and every box deferred to it; **the published benchmark has not
+(§4.2). Not met and **not** accepted yet: the 50 ms budget for the first expression (item 3). Not run: step 19 and every box deferred to it; **the published benchmark has not
 run.**
 
 ## 2. What I ran
@@ -86,9 +92,9 @@ Not run, by the rules of this part: a full Stryker area run, any benchmark, the
 | Area | Verdict | Evidence (details in §4 and §6) |
 |---|---|---|
 | Types, schema (steps 03, 04) | **Ready** | §6 steps 03–04: all boxes verified (two with caveats about test form); `pnpm check` |
-| Changesets and validators (05, 06, 15) | **Ready** | §6; changeset mutation survivors triaged one by one (#74), score 88.14%; duplicate names and own-key reads fixed (#75) |
-| Query builder and expressions (07–09) | **Ready with caveats** | §6; mutation 83.46%, about 106 (42–237) untested logic survivors estimated by sample (§4.3) |
-| SQL compiler (10) | **Ready with caveats** | §6; injection property on all three dialects (10,000 runs in CI, 100,000 once in 21-security); mutation 93.04%, about 35 (14–78) estimated gaps |
+| Changesets and validators (05, 06, 15) | **Ready** | §6; changeset mutation survivors triaged one by one ([#74](https://github.com/egon-orm/egon-orm/pull/74)), score 88.14%; duplicate names and own-key reads fixed ([#75](https://github.com/egon-orm/egon-orm/pull/75)) |
+| Query builder and expressions (07–09) | **Ready with caveats** | §6; mutation 83.46%; survivors sampled, not triaged one by one (owner decision 4, 2026-10-23): about 106 (42–237) untested estimated (§4.3) |
+| SQL compiler (10) | **Ready with caveats** | §6; injection property on all three dialects (10,000 runs in CI, 100,000 once in 21-security); mutation 93.04%; survivors sampled, not triaged (owner decision 4): about 35 (14–78) estimated gaps |
 | Adapter, repo reads and writes (11–13) | **Ready with caveats** | §6; my integration run; Postgres 14 claimed but untested (P2); the "global teardown" leak box is false as worded (P9), covered in practice by fault injection and the soak |
 | Associations, transactions, Batch (14, 16) | **Ready** | §6; seams tests (`packages/postgres/test/seams.itest.ts`) in my integration run |
 | Dialects: SQLite, MySQL (17) | **Ready with caveats** | §6; tier-2 integration passes; "CI jobs required" is false (no branch protection, P0) |
@@ -97,8 +103,8 @@ Not run, by the rules of this part: a full Stryker area run, any benchmark, the
 | Edge readiness, JSON responses (21a, 21b) | **Ready** | §6: every box verified, six with low caveats |
 | Security (21 §2) | **Ready with caveats** | F4 open by owner decision (1.0 gate); P1 (Zod peer) |
 | Robustness (21 §3) | **Ready** | §4.4 |
-| Type health (21 §1) | **Ready with caveats** | completions budget not met at about 140–170 connected schemas, accepted by the owner (§4.2) |
-| API surface (21 §1) | **Ready** | API report committed, `api:check` in CI's `build+publint+attw` job; owner items 1–9 built (#72) |
+| Type health (21 §1) | **Not ready** until the owner decides P11 | completions budget not met at about 140–170 connected schemas, accepted by the owner; 50 ms budget missed by the first expression (53–55 ms), not accepted (§4.2) |
+| API surface (21 §1) | **Ready** | API report committed, `api:check` in CI's `build+publint+attw` job; owner items 1–9 built ([#72](https://github.com/egon-orm/egon-orm/pull/72)) |
 | Packaging and release mechanics (21 §4) | **Ready** | publint, attw, smoke, peer bounds jobs, dry run from a clean clone |
 | Release settings and repository governance | **Not ready** (owner) | §4.9: none of O1–O6 done; owner: the project owner; proposed issue in §10 |
 | Supply chain | **Ready with caveats** | no runtime dependency in any published package; P1; dev-only advisories (§4.7) |
@@ -117,7 +123,7 @@ Not run, by the rules of this part: a full Stryker area run, any benchmark, the
   by inspecting the object"). `packages/core/src/errors.ts` has no custom inspect today
   (grep for `inspect.custom` finds nothing). Before 1.0: a custom inspect on the constraint
   and driver errors that hides `detail` and the cause.
-- **F5 (Low): fixed** in #72: schemaless changesets never generate code
+- **F5 (Low): fixed** in [#72](https://github.com/egon-orm/egon-orm/pull/72): schemaless changesets never generate code
   (`changeset/spec.ts`, `refuseGeneration`), test in
   `packages/core/test/security/codegen.test.ts` (zero `Function` constructions). The F5 row of
   `status/21-security.md` still says "Owner's decision"; `status/21-decisions.md` supersedes it.
@@ -141,14 +147,17 @@ callback of the 200-schema project):
   plus 1.1–1.2 ms per reachable schema, so it is crossed at roughly 140–170 connected
   schemas on this machine (my 150-schema tree: 189 ms, just under). **The owner accepted
   this for `0.1.0`** (2026-10-22); it is on the roadmap as "Faster editor completions in
-  large models" (`docs/site/reference/roadmap.md:27`, PR #70). The workaround (declare the
+  large models" (`docs/site/reference/roadmap.md:27`, PR [#70](https://github.com/egon-orm/egon-orm/pull/70)). The workaround (declare the
   return type of `changeset` methods, about 114 ms at 200 schemas in 21-api's measurement)
   is in the FAQ, "Why are editor completions slow in a large model?"
   (`docs/site/guide/faq.md:279-298`), with a checked example
   (`docs/site/examples/faq-completions.ts`). I did not re-measure the workaround.
-- **50 ms per query expression:** met except the first statement a program checks, a
-  one-time cost of resolving the library's types: I measured 55.2 ms (max 56.4) at
-  `queries-00.ts:4` in the 200-schema tree; the next slowest statement is 21.8 ms.
+- **50 ms per query expression: not met, and not accepted.** Every expression is under
+  50 ms except the first one a program checks, a one-time cost of resolving the library's
+  types: I measured 55.2 ms (max 56.4) at `queries-00.ts:4` in the 200-schema tree (21-api
+  recorded 54–63 ms; the reviewer of this report measured 53–55 ms); the next slowest is
+  21.8 ms. The owner kept type health as a `0.1.0` gate and accepted only the completions
+  miss, so this is an **unmet `0.1.0` gate** that needs the owner's decision (P11, §10).
   `examples/blog`: slowest 31.4 ms (`src/accounts.ts:16`).
 - **Instantiation counts** (I measured; identical to 21-api's): `examples/blog` 48,563
   instantiations, 14,730 types, check 0.19 s; 200-schema tree 401,512 instantiations, 59,175
@@ -166,11 +175,16 @@ is not allowed here):
 | query | **83.46%** | `status/21-robustness.md` §4 | 798 logic survivors; sample of 30: 4 real gaps, estimate **about 106 untested (42–237)** |
 | changeset | **88.14%** (from 83.14%) | `status/21-changeset-gaps.md` (run on `01b6cf0`) | all 530 logic survivors looked at one by one: 202 now tested (203 gaps closed), 123 equivalent, 205 low value; no production bug |
 
-All three are over the 80% target. The query and compiler estimates are still open; they
-are not gates. **Proposal:** triage the query and compiler logic survivors one by one, as was
+All three are over the 80% target. **The query and compiler survivors were sampled, not
+triaged one by one** (30 per area). That is by owner decision 4 of 2026-10-23
+(`status/21-robustness.md`, "Owner decisions"): only the changeset survivors were made a
+`0.1.0` gate, because their sampled gap rate (about 37%, 50% in the two largest files) was far
+above the query and compiler rates (13%), which were not raised to a gate. The query and
+compiler estimates are still open; their explicit acceptance for `0.1.0` is asked for in §10
+item 6. **Proposal:** triage the query and compiler logic survivors one by one, as was
 done for the changeset area, as 1.0 work and a 1.0 gate (§8): the query estimate (42–237
 untested behaviours) is too wide to call the area fully tested, and the method is proven.
-Note: the robustness note's summary table still says changeset 83.14%; #74 brought it to
+Note: the robustness note's summary table still says changeset 83.14%; [#74](https://github.com/egon-orm/egon-orm/pull/74) brought it to
 88.14% (the robustness note's §4 explains the history).
 
 ### 4.4 Robustness
@@ -188,13 +202,13 @@ fixed, each with a test: a Postgres stream whose session ended held its connecti
 `@egon-orm/sqlite` failed when bundled to CommonJS (Medium).
 
 CI: `runtime (node 22)` and `runtime (node 24)` are in the `ci` gate and passed on
-`c2088d6` (run 40123401475); the Bun workflow passed (run 40123401470). The weekly soak
+`c2088d6` (run [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475)); the Bun workflow passed (run [40123401470](https://github.com/egon-orm/egon-orm/actions/runs/40123401470)). The weekly soak
 workflow (`.github/workflows/robustness.yml`) **has not run on GitHub yet** (no runs listed);
 the 30-minute result is local only.
 
 My 2-minute soak (`pnpm test:soak`, default settings, 121 s): **passed**. 11,095 operations, 66 kills, 7 expected `DatabaseError` `connection` failures, 0 unexpected, 0 unhandled rejections, 0 uncaught exceptions, 0 stuck workers, at most 5 backends, final pool 4 open / 4 idle / 0 waiting, `close()` clean, 0 backends after close, accounts total 10,000, heap growth +0.47 MB. Short, so it says nothing about the 9-minute hang class that only the 30-minute run could find.
 
-### 4.5 Hardening (PR #75)
+### 4.5 Hardening (PR [#75](https://github.com/egon-orm/egon-orm/pull/75))
 
 Done as the owner decided on 2026-10-24: a field listed twice is processed once
 (`packages/core/src/internal/distinct.ts`); every read of an options object, and of the
@@ -218,8 +232,8 @@ the own-read audit was done by reading, with no lint to enforce it (a gap it sta
   (`types (typescript minimum)`, `types (typescript latest)`, both green on `c2088d6`).
   **The build stays on TypeScript 6** (6.0.3; owner decision, tsup's declaration bundler,
   TypeDoc and API Extractor need the TypeScript JS API); TS 7 is supported for users.
-- **`types (typescript next, informational)` fails, on `main` too** (run 40123401475, and
-  every `main` run since #69, e.g. 39906052551), on 7.1.0-dev.20261023.1, with two errors:
+- **`types (typescript next, informational)` fails, on `main` too** (run [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475), and
+  every `main` run since [#69](https://github.com/egon-orm/egon-orm/pull/69), e.g. [39906052551](https://github.com/egon-orm/egon-orm/actions/runs/39906052551)), on 7.1.0-dev.20261023.1, with two errors:
   - `TS5115` in Zod 4.6.5's own declarations (`zod/v4/classic/schemas.d.cts(804,5)`:
     "Instantiations … appear infinitely circular"). Zod's, not ours.
   - `TS5088` at `examples/smoke/types/consumer.ts:174`,
@@ -264,8 +278,8 @@ security review and 28 at packaging. Grouped by package (paths to the first two 
 | fast-uri | moderate/low | `tsup`, Stryker, API Extractor, verdaccio, `docs/site > fastify` | No |
 
 `braces` (via `verdaccio`), listed at packaging, no longer appears. **No published package
-has a runtime dependency**: I read every `packages/*/package.json`: `dependencies` is empty
-in all six; `egon-orm` has no `peerDependencies` either (ADR 0003); the others declare only
+has a runtime dependency**: I read every `packages/*/package.json`: none of the six has a
+`dependencies` field at all; `egon-orm` has no `peerDependencies` either (ADR 0003); the others declare only
 peers (`pg`, optional `pg-cursor` and `@types/pg`; `mysql2`; `better-sqlite3`; `zod`;
 `egon-orm`). So no advisory reaches a published package's runtime dependencies. The only one
 that reaches a user's install is Zod, through the peer range of `@egon-orm/zod`.
@@ -300,10 +314,10 @@ Checked read-only on 2026-10-24 with `env -u GH_TOKEN gh api`:
 
 | # | Action | State | Evidence |
 |---|---|---|---|
-| O1 | Repository variable `RELEASE=on` | **Not done** | `actions/variables`: `total_count: 0`. Every job of `release.yml` is skipped (run 40123401614 "skipped") |
+| O1 | Repository variable `RELEASE=on` | **Not done** | `actions/variables`: `total_count: 0`. Every job of `release.yml` is skipped (run [40123401614](https://github.com/egon-orm/egon-orm/actions/runs/40123401614) "skipped") |
 | O2 | `npm` environment, deployment branches restricted to `main` (required reviewers recommended) | **Not done** | `environments`: only `github-pages` |
 | O3 | `NPM_TOKEN` (first publish) or trusted publishing | **Not done** (token) / not checkable (trusted publishing is set on npmjs.com, and the packages do not exist yet) | `actions/secrets`: `total_count: 0`; no environment to hold one |
-| O4 | Branch protection on `main`: one approval, the `ci` check, squash only | **Not done** | `branches/main/protection`: 404 "Branch not protected"; `branches/main`: `protected: false`. The one ruleset, `main-protection` (id 25116048, active), has `conditions.ref_name.include: []`, so it applies to no branch, and its rules are only `deletion` and `non_fast_forward`. Merge methods: squash, merge commit and rebase all allowed. Evidence that it matters: #72 merged with `integration (tier 2)` and `ci` red (run 39986225471) |
+| O4 | Branch protection on `main`: one approval, the `ci` check, squash only | **Not done** | `branches/main/protection`: 404 "Branch not protected"; `branches/main`: `protected: false`. The one ruleset, `main-protection` (id 25116048, active), has `conditions.ref_name.include: []`, so it applies to no branch, and its rules are only `deletion` and `non_fast_forward`. Merge methods: squash, merge commit and rebase all allowed. (An earlier version of this report said [#72](https://github.com/egon-orm/egon-orm/pull/72) merged with tier 2 red. That was wrong: see Review round 1.) |
 | O5 | Private vulnerability reporting | **Not done** | `private-vulnerability-reporting`: `{"enabled": false}`; `SECURITY.md` points reporters to it |
 | O6 | "Allow GitHub Actions to create and approve pull requests" (the release workflow's version job opens the version PR) | **Not done** | `actions/permissions/workflow`: `can_approve_pull_request_reviews: false`, `default_workflow_permissions: read` |
 
@@ -331,9 +345,9 @@ today, so "enforced" holds only as far as reviewers honour a red check.
 
 ## 5. Step 21's own Acceptance
 
-The PRs behind it: #57 (21a), #60 (21b), #61, #62, #65 (packaging), #68 (security), #69
-(21-api), #70, #71, #72 (decisions), #73 (robustness), #74 (changeset gaps), #75
-(hardening); all merged (`gh pr list`). #59 and #63, #64, #66, #67 are plan and roadmap PRs.
+The PRs behind it: [#57](https://github.com/egon-orm/egon-orm/pull/57) (21a), [#60](https://github.com/egon-orm/egon-orm/pull/60) (21b), [#61](https://github.com/egon-orm/egon-orm/pull/61), [#62](https://github.com/egon-orm/egon-orm/pull/62), [#65](https://github.com/egon-orm/egon-orm/pull/65) (packaging), [#68](https://github.com/egon-orm/egon-orm/pull/68) (security), [#69](https://github.com/egon-orm/egon-orm/pull/69)
+(21-api), [#70](https://github.com/egon-orm/egon-orm/pull/70), [#71](https://github.com/egon-orm/egon-orm/pull/71), [#72](https://github.com/egon-orm/egon-orm/pull/72) (decisions), [#73](https://github.com/egon-orm/egon-orm/pull/73) (robustness), [#74](https://github.com/egon-orm/egon-orm/pull/74) (changeset gaps), [#75](https://github.com/egon-orm/egon-orm/pull/75)
+(hardening); all merged (`gh pr list`). [#59](https://github.com/egon-orm/egon-orm/pull/59) and [#63](https://github.com/egon-orm/egon-orm/pull/63), [#64](https://github.com/egon-orm/egon-orm/pull/64), [#66](https://github.com/egon-orm/egon-orm/pull/66), [#67](https://github.com/egon-orm/egon-orm/pull/67) are plan and roadmap PRs.
 
 - [ ] **Audit report written with evidence for each verdict; no "not ready" item without an
   owner and issue.** The report is this note. Every "not ready" item has an owner (the
@@ -341,7 +355,7 @@ The PRs behind it: #57 (21a), #60 (21b), #61, #62, #65 (packaging), #68 (securit
   all (`gh issue list --state all`: empty), and creating them is not this part's job. Each
   has a proposed title and body in §10. Ticked once the owner opens them.
 - [x] **Security review complete; all findings fixed or documented with severity.** F1–F11
-  in `status/21-security.md`, each with a severity; F1, F2, F3, F5, F11 fixed (F5 in #72);
+  in `status/21-security.md`, each with a severity; F1, F2, F3, F5, F11 fixed (F5 in [#72](https://github.com/egon-orm/egon-orm/pull/72));
   F4 documented (`SECURITY.md:40`, pinned by `secrets.itest.ts:210`); F6–F10 documented.
   New since: the Zod advisory (P1), which is a dependency finding, recorded here with its
   severity.
@@ -353,9 +367,10 @@ The PRs behind it: #57 (21a), #60 (21b), #61, #62, #65 (packaging), #68 (securit
 - [x] **Mutation score target met for the three core areas.** 93.04%, 83.46%, 88.14% (§4.3),
   taken from the notes, not re-run (a full run is not allowed in this part).
 - [ ] **Type-health budgets met.** Not met: completions over 200 ms at about 140–170
-  connected schemas (I measured 230–239 ms at 200, 189 ms at 150), and the first statement a
-  program checks takes about 55 ms. Instantiation counts are recorded. The owner accepted the
-  completions gate as not met for `0.1.0` (2026-10-22), with the fix on the roadmap.
+  connected schemas (I measured 230–239 ms at 200, 189 ms at 150), and the first expression a
+  program checks takes 53–55 ms, over the 50 ms budget. Instantiation counts are recorded. The
+  owner accepted the completions gate as not met for `0.1.0` (2026-10-22), with the fix on the
+  roadmap; the 50 ms miss is not accepted yet (P11, §10 item 5a).
 - [x] **Release dry run succeeds end to end from a clean clone.** I ran it from a fresh
   `git clone` of `origin` at `c2088d6` (§4.8): passed. CI's `release dry run` job passed too.
 - [x] **API report committed and enforced in CI.** `api-report/`, nine entry points;
@@ -370,14 +385,14 @@ split into (a) and (b), and only the benchmark half is "not run (step 19)". Step
 and every box deferred to it are **not run** and do not count against readiness. My own runs
 in §2 (`pnpm check`, the full integration suite on both tiers, `lint:packages`, `smoke`,
 `docs:build`, `api:check`) back every box below that says "conformance green" or "CI".
-CI references: run 40123401475 (CI, `c2088d6`, success; only the informational
-TypeScript-next job failed), 40086470578 (CI, `5b48199`), 40123401469 (Docs, `c2088d6`).
+CI references: run [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475) (CI, `c2088d6`, success; only the informational
+TypeScript-next job failed), [40086470578](https://github.com/egon-orm/egon-orm/actions/runs/40086470578) (CI, `5b48199`), [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469) (Docs, `c2088d6`).
 
 Verdicts:
 
 | Step | verified | verified with caveat | false | unverified | not run (step 19) |
 |---|---|---|---|---|---|
-| 01 | 3 | 2 | 0 | 0 | 1 |
+| 01 | 3 | 3 | 0 | 0 | 0 |
 | 02 | 5 | 1 | 0 | 0 | 1 |
 | 03 | 4 | 1 | 0 | 0 | 0 |
 | 04 | 3 | 2 | 0 | 0 | 1 |
@@ -399,7 +414,7 @@ Verdicts:
 | 20 | 2 | 1 | 1 | 1 | 0 |
 | 21a | 5 | 4 | 0 | 0 | 1 |
 | 21b | 5 | 2 | 0 | 0 | 1 |
-| **total** | **59** | **31** | **3** | **2** | **17** |
+| **total** | **59** | **32** | **3** | **2** | **16** |
 
 The three **false** boxes:
 
@@ -411,7 +426,8 @@ The three **false** boxes:
   gap (P9), not a known leak.
 - **17.3** "CI jobs added and required": added, but nothing is required (O4).
 - **20.5** "Site builds with zero warnings and deploys from `main`": it deploys, but the build
-  prints Vite's chunk-size warning (my `docs:build` and Docs run 40123401469) (P8).
+  prints Vite's chunk-size warning (my `docs:build` and Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469)), and the deploy
+  job prints a `punycode` DEP0040 deprecation warning (P8).
 
 The two **unverified** boxes: **11.2** Postgres 14 (no CI job, compose or script runs it; the
 status note's run was local) (P2); **20.4** the fresh-eyes test (no transcript in the
@@ -420,12 +436,12 @@ repository; it cannot be re-run within this part).
 ### Step 01: Foundation
 | # | Box (short) | Verdict | How checked | Evidence |
 |---|---|---|---|---|
-| 1 | Fresh clone: `pnpm i && db:up && check && test:integration` passes | verified with caveat | CI is a fresh checkout. Its jobs run each part of `pnpm check` (as separate jobs) plus the integration suite. `pnpm check` passed in my run (§2). | `.github/workflows/ci.yml` jobs `lint`, `typecheck`, `unit+types (node 22/24)`, `build+publint+attw`, `integration` (runs `pnpm db:up`, then `pnpm test:integration`). Run 40086470578 on 5b48199 is all green. `package.json` `check` script is lint && typecheck && test:unit && test:types && build. |
+| 1 | Fresh clone: `pnpm i && db:up && check && test:integration` passes | verified with caveat | CI is a fresh checkout. Its jobs run each part of `pnpm check` (as separate jobs) plus the integration suite. `pnpm check` passed in my run (§2). | `.github/workflows/ci.yml` jobs `lint`, `typecheck`, `unit+types (node 22/24)`, `build+publint+attw`, `integration` (runs `pnpm db:up`, then `pnpm test:integration`). Run [40086470578](https://github.com/egon-orm/egon-orm/actions/runs/40086470578) on 5b48199 is all green. `package.json` `check` script is lint && typecheck && test:unit && test:types && build. |
 | 2 | Failing type test, unit test, lint error and coverage drop each fail CI (demonstrate once) | verified with caveat | Read the gating config. Re-checked the coverage gate live. The original demonstration was local, not by pushing failing commits to CI (step 01's removed status note, `git show 4a2a237:docs/plan/status/01.md`, "Failure demonstrations"). | `biome.json` rules `noDefaultExport`, `noNonNullAssertion`, `noExplicitAny`, `noTsIgnore` and `noConsole` (packages) are set to `error`. `pnpm lint` = `biome ci --error-on-warnings`. `vitest.config.ts` thresholds are 95% lines and branches for `packages/{core,postgres,cli,sqlite,mysql}/src/**`. My run of `src/internal/hash.test.ts` with coverage printed `ERROR: Coverage for lines (0.16%) does not meet "packages/core/src/**" threshold (95%)`. The `unit+types` job runs `test:unit` (with `--coverage`) and `test:types`. |
-| 3 | `import { VERSION } from "egon-orm"` works from an ESM script and from a CommonJS `require()` script in `examples/smoke/` | verified | Read the scripts and CI. | `examples/smoke/esm.mjs:12,17` and `examples/smoke/require-esm.cjs:14,18`. `smoke` = `node esm.mjs && node require-esm.cjs && node consumer.mjs`. ci.yml `build+publint+attw` runs `pnpm smoke --node <22.12.0>`, and the job is green in run 40086470578. |
+| 3 | `import { VERSION } from "egon-orm"` works from an ESM script and from a CommonJS `require()` script in `examples/smoke/` | verified | Read the scripts and CI. | `examples/smoke/esm.mjs:12,17` and `examples/smoke/require-esm.cjs:14,18`. `smoke` = `node esm.mjs && node require-esm.cjs && node consumer.mjs`. ci.yml `build+publint+attw` runs `pnpm smoke --node <22.12.0>`, and the job is green in run [40086470578](https://github.com/egon-orm/egon-orm/actions/runs/40086470578). |
 | 4 | `docs/plan/spikes/schema-typing.ts` type-checked in CI | verified | Read the config. | `tsconfig.spikes.json` `files: ["docs/plan/spikes/schema-typing.ts"]`. `package.json` `typecheck` = `tsc -b && pnpm typecheck:spikes`, which also runs `scripts/check-rejected-spike.mjs`. ci.yml job `typecheck` (`pnpm typecheck`, comment at lines 339-341). |
 | 5 | Two integration files run in parallel without interfering | verified | Read the test and the config. Not run by the reviewer; my integration run (§2) passed it. | `packages/core/test/support/parallel.itest.ts:90` "two integration test files run in parallel without interfering" starts project `core:parallel-pair` with `--maxWorkers=2` (line 67). `parallel-a.pair.ts` / `parallel-b.pair.ts` meet through `pg_stat_activity` (`parallel.ts:44`). `vitest.config.ts` integration project sets `fileParallelism: true`, and each file gets its own database (`test/support/db.ts`). |
-| 6 | `pnpm bench` runs the example benchmark and writes a results file | not run (step 19) | The box is about benchmarks, so it is not counted (§5 of the spec). Harness evidence for the record. | `benchmarks/micro/_example.bench.ts`. `benchmarks/src/run.ts:109-112` writes `benchmarks/results/<sha>.json`. ci.yml `build+publint+attw` runs `pnpm bench`, and the job is green. |
+| 6 | `pnpm bench` runs the example benchmark and writes a results file | verified with caveat | The box is about the harness, not results or budgets, so it is classified from CI. Read the CI job and the runner. | `.github/workflows/ci.yml:123-125`: `build+publint+attw` runs `pnpm bench` ("keeps the benchmark harness working"), green in run [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475). `benchmarks/micro/_example.bench.ts`; `benchmarks/src/run.ts:109-112` writes `benchmarks/results/<sha>.json`. Caveat: CI does not assert the results file exists; that half rests on reading the runner. I did not run it (no benchmarks in this part). |
 
 Findings
 - low: Box 2 was shown locally once, at step 01, never by a failing CI run. The gates in today's config are real (biome rule levels, coverage thresholds that fire, separate `test:types` step), so the claim holds in substance.
@@ -542,8 +558,8 @@ Findings
 | 1 | Every step 07 AST node kind is emitted, with a snapshot and an execution test | verified with caveat | Grepped `sql-cases.ts` for each of the 21 expression kinds plus order and window (each appears); read `sql.itest.ts` | `compiler/sql.itest.ts:49-51` runs every case of `ALL_CASES` on Postgres in a rolled-back transaction. `registry.test.ts` > "the list above names every kind of the contract" checks the kind list against the contract type. No test asserts mechanically that every kind has a case: coverage is by construction of the matrices, which I spot-checked by grep (ident 6, star/count() 7, tuple 4, selectedAs 3, jsonPath 3, exists 7). |
 | 2 | Budgets: L1 hit < 0.3 µs, cold < 40 µs | not run (step 19) | — | Deferred; `benchmarks/micro/compiler.bench.ts` not delivered. |
 | 3 | Zero collisions across the test suite; forced-collision test passes | verified with caveat | Read the cache tests and grepped the collision assertions | `compiler/cache.test.ts` > "hash collisions" > "a forced collision is caught by the structural check and never serves a wrong plan" (collisions 1, then 2, correct plans). There are 30 assertions of `collisions` = 0 (shared-compiler matrices, `sql.itest.ts:115`, `advanced.sql.test.ts`). There is no suite-wide hook, so "whole suite" means every place where a cache is shared, not every compiler ever created. |
-| 4 | Injection property test passes with 10,000 runs | verified | Read the test and ran it | `compiler/property.test.ts:128-148` "arbitrary strings in every value position are bound, never written (10,000 runs by default)", for each dialect, 18 value positions. `EGON_PROPERTY_RUNS` can only raise the count (`runs()` :115-120) and is not set in `.github/workflows/ci.yml` or `package.json`. Passed in my run. |
-| 5 | Core has no runtime dependency; ADR 0003 rules hold; a test asserts no AST string reaches `sql` except via quote or table lookup | verified with caveat | Read `package.json` and the non-relative imports of core sources; read the identifier and lookup properties | Core has no `dependencies`/`peerDependencies`/`optionalDependencies`. The only non-relative runtime import in `src` is `node:async_hooks`, obtained through `process.getBuiltinModule` (`repo/transaction.ts:793`). Tests: `property.test.ts` > "identifiers on $name: a name from the AST is always quoted" (table, alias, schema, column, CTE, values columns, source keys, selected name, update target, write schema) and "names that are looked up in a table are refused when they are not in it" (operators, unary/nary, fn, aggregate, lock clause, join type, direction, nulls, set op, ident, window name). This works by listing positions; it is not a mechanical walk of every string field, so a new string field would need a new position. |
+| 4 | Injection property test passes with 10,000 runs | verified | Read the test and ran it | `compiler/property.test.ts:128-148` "arbitrary strings in every value position are bound, never written (10,000 runs by default)", for each dialect, 18 value positions. `EGON_PROPERTY_RUNS` replaces the count, so it could also lower it (`runs()` :113-115 returns the override); it is not set in `.github/workflows/ci.yml` or `package.json`, so CI runs the default 10,000. Passed in my run. |
+| 5 | Core has no runtime dependency; ADR 0003 rules hold; a test asserts no AST string reaches `sql` except via quote or table lookup | verified with caveat | Read `package.json` and the non-relative imports of core sources; read the identifier and lookup properties | Core has no `dependencies`/`peerDependencies`/`optionalDependencies`. The non-relative runtime imports in `src` are Node built-ins only: `node:async_hooks`, obtained through `process.getBuiltinModule` (`repo/transaction.ts:793`), and `node:fs/promises`, `node:path` and `node:url`, imported dynamically when a migrations directory is loaded (`migration/loader.ts:195-199`). No third-party package. Tests: `property.test.ts` > "identifiers on $name: a name from the AST is always quoted" (table, alias, schema, column, CTE, values columns, source keys, selected name, update target, write schema) and "names that are looked up in a table are refused when they are not in it" (operators, unary/nary, fn, aggregate, lock clause, join type, direction, nulls, set op, ident, window name). This works by listing positions; it is not a mechanical walk of every string field, so a new string field would need a new position. |
 
 Findings
 - (low) The "every AST string field" guarantee (box 5) and the "every node kind has a case" guarantee (box 1) rest on hand-maintained lists of positions and cases, not on a check derived from the contract types. They hold today, but a new node field could slip past.
@@ -617,7 +633,7 @@ Findings
 | 1 | Statement sequences for all paths; no connection leak | verified | Read the unit tests. A scripted fake pool logs every statement and counts acquired/released/destroyed. Each outcome asserts the exact log and the pool counters. | `packages/core/src/repo/transaction.test.ts`: `statement sequences` (l.185), `when a transaction statement fails` (l.292: BEGIN/COMMIT/ROLLBACK/SAVEPOINT/RELEASE/ROLLBACK TO failures), `nested transactions`, `timeoutMs on a transaction`, `retries`, `checkout`, `the sandbox`, `running a batch`. Example: l.196 `expect([pool.acquired, pool.released, pool.destroyed]).toEqual([1, 1, 0])`. The integration side checks pool stats in `core/test/conformance/transaction/index.ts`. |
 | 2 | Batch result/error types fully inferred, no annotations | verified | Read the type tests. Results, function-step arguments and the failure union are all inferred and checked with `expectTypeOf`. The only declared values are inputs (`declare const userChangeset`, `repo`), not result annotations. | `packages/core/src/batch/batch.test-d.ts`: `results accumulate > five different steps…` (l.20), `failures > are a union over the steps that can fail, narrowed by step` (l.107), `what does not compile > a step name already used` (l.162). |
 | 3 | Sandbox adopted by core integration suites; before/after timings in status note | verified with caveat | Grepped the conformance suites for `createSandbox` / `truncateAll`. Read the status note's timing section. | The write suite uses the sandbox: `core/test/conformance/write/index.ts:43,136-141`. The nested suite still truncates before each test: `core/test/conformance/nested/index.ts:261-263`. Read/preload seed once and do not need it. The transaction suite truncates by design. Timings are in `docs/plan/status/16.md:382-388`: 2.55-2.62 s before, 3.00-3.50 s after, so the sandbox made the suite slower. |
-| 4 | Conformance suite green on Postgres | verified | CI log of run 40123401475, job `integration (tier 2)`. | `postgres:integration test/transaction-conformance.itest.ts (48 tests)`, 0 skipped. |
+| 4 | Conformance suite green on Postgres | verified | CI log of run [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475), job `integration (tier 2)`. | `postgres:integration test/transaction-conformance.itest.ts (48 tests)`, 0 skipped. |
 
 Findings
 - (low) "Adopted by the core integration suites" holds for one suite only, the write suite. The nested-changeset conformance suite (step 15) still empties tables with `truncateAll` before each test (`core/test/conformance/nested/index.ts:263`). The spec's goal of a speed-up was not met (the status note says so honestly).
@@ -626,13 +642,13 @@ Findings
 
 | # | Box (short) | Verdict | How checked | Evidence |
 |---|---|---|---|---|
-| 1 | Conformance green on SQLite and MySQL 8; skips equal documented gaps | verified with caveat | CI tier-2 log for pass/skip counts. Grepped every `skip(` in `core/test/conformance/*/index.ts`. | CI 40123401475 `integration (tier 2)`: all sqlite:/mysql: conformance files pass. SQLite skips: adapter 16, read 6, write 5, migration 1, transaction 10. MySQL skips: adapter 4, read 5, write 4, migration 2, transaction 1. Most skips are gated on `capabilities.X` or on migration-table features, which `docs/site/reference/dialect-support.md` lists. A few are profile-gated rather than capability-gated (`read/index.ts:1349` "no microsecond timestamps", `:1377` "no binary column", `transaction/index.ts:575` "no safe way to make a COMMIT wait"). |
+| 1 | Conformance green on SQLite and MySQL 8; skips equal documented gaps | verified with caveat | CI tier-2 log for pass/skip counts. Grepped every `skip(` in `core/test/conformance/*/index.ts`. | CI [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475) `integration (tier 2)`: all sqlite:/mysql: conformance files pass. SQLite skips: adapter 16, read 6, write 5, migration 1, transaction 10. MySQL skips: adapter 4, read 5, write 4, migration 2, transaction 1. Most skips are gated on `capabilities.X` or on migration-table features, which `docs/site/reference/dialect-support.md` lists. A few are profile-gated rather than capability-gated (`read/index.ts:1349` "no microsecond timestamps", `:1377` "no binary column", `transaction/index.ts:575` "no safe way to make a COMMIT wait"). |
 | 2 | Unsupported feature: compile-time `QueryError` naming feature and dialect | verified | Read the test. Every boolean capability is either in `COMPILE_TIME` with a probe or in `BEHAVIOUR`, and a test enforces that partition. For each dialect where a flag is false, the probe must throw `QueryError` matching `\b<dialect>\b`. `run()` rethrows non-QueryError errors. | `packages/core/src/compiler/capabilities.test.ts:113` (`every capability is in exactly one list`), `:125` (`$name > <flag>: a statement that needs it is refused, naming the dialect`). `unsupported()` is at `compiler/dialect.ts:793`. |
 | 3 | Support matrix generated and published; CI jobs added and required | **false** | Read `package.json` lint and `ci.yml`. Queried the GitHub branch protection and ruleset APIs. | Matrix: generated by `scripts/dialect-support.ts`, staleness checked by `--check` in `pnpm lint`, published in `docs/site/reference/dialect-support.md`. Jobs: `integration` (SQLite) and `integration (tier 2)` (MySQL), both under the aggregate `ci` job (`ci.yml:271-280`). **Not required**: `gh api …/branches/main/protection` returns 404 "Branch not protected". The only ruleset, `main-protection` (id 25116048), has `ref_name.include: []`, so it targets no branch, and its only rules are `deletion` and `non_fast_forward`. `gh api …/rules/branches/main` returns `[]`. No status check is required. |
 | 4 | No dialect-name conditionals outside adapter/, compiler/, dialect packages | verified | Ran the check. Grepped `core/src`, `cli/src` and `zod/src` for `.dialect` and quoted dialect names. Other dialect differences there are table-driven (`ctx.dialect.features.*`). | `scripts/check-dialect-conditionals.mjs` runs in `pnpm lint` and has a unit test (`check-dialect-conditionals.test.mjs`). It prints "ok: no dialect-name conditionals…". It also covers `core/test/conformance`. |
 
 Findings
-- (medium) The status note claim "Both are required through `ci`" (`docs/plan/status/17.md:101-102`) is false on GitHub. The `ci` aggregate job exists, but no branch protection or effective ruleset requires it on `main`. The ruleset `main-protection` has an empty include list, so it applies to no branch (`gh api repos/egon-orm/egon-orm/rules/branches/main` returns `[]`). A PR can merge with a red tier-2 job. CI did fail on `main` for #72 (run 39986225471: `integration (tier 2)` and `ci` failed).
+- (medium) The status note claim "Both are required through `ci`" (`docs/plan/status/17.md:101-102`) is false on GitHub. The `ci` aggregate job exists, but no branch protection or effective ruleset requires it on `main`. The ruleset `main-protection` has an empty include list, so it applies to no branch (`gh api repos/egon-orm/egon-orm/rules/branches/main` returns `[]`). A PR can merge with a red tier-2 job. ([#72](https://github.com/egon-orm/egon-orm/pull/72) itself merged after a fully green re-run of its head, run [39985031082](https://github.com/egon-orm/egon-orm/actions/runs/39985031082) attempt 2; the red tier 2 of `main`'s post-merge run [39986225471](https://github.com/egon-orm/egon-orm/actions/runs/39986225471) on `8b1aeea` was the close race fixed in [#73](https://github.com/egon-orm/egon-orm/pull/73).)
 - (low) A few conformance skips are gated on a profile's fixture shape, not a capability: the microsecond, binary-column and COMMIT-wait skips. The owner accepted the microsecond one (status 17 "Needs the owner's decision", approved 2026-10-20). The status note left box 1 unticked for this reason. `dialect-support.md` does not list these skips. On Postgres the adapter suite also shows 1 skipped (CI log), which I did not trace.
 - (low) The check's regex only catches `===`/`!==`/`case` forms. `["mysql"].includes(x)` or a lookup keyed by dialect name would pass it. My grep found no such use today.
 
@@ -640,7 +656,7 @@ Findings
 
 | # | Box (short) | Verdict | How checked | Evidence |
 |---|---|---|---|---|
-| 1 | up → down → up of the blog schema on all supported dialects | verified | Read the conformance test. Confirmed there is a profile per dialect, and checked the CI log. | `core/test/conformance/migration/index.ts:91` (`the blog schema goes up, down to an empty database, and up again`), run by `postgres/`, `sqlite/` and `mysql/test/migration-conformance.itest.ts`. All three pass in CI run 40123401475 (tier 2). |
+| 1 | up → down → up of the blog schema on all supported dialects | verified | Read the conformance test. Confirmed there is a profile per dialect, and checked the CI log. | `core/test/conformance/migration/index.ts:91` (`the blog schema goes up, down to an empty database, and up again`), run by `postgres/`, `sqlite/` and `mysql/test/migration-conformance.itest.ts`. All three pass in CI run [40123401475](https://github.com/egon-orm/egon-orm/actions/runs/40123401475) (tier 2). |
 | 2 | Concurrent-runner test passes 50 consecutive times | verified with caveat | Read the test. It is one test with a loop: two runners race 50 times, each iteration on a fresh tracking table. It is not 50 separate runs of the test. All three dialect tables have `locks: true`, so it runs everywhere. | `migration/index.ts:229` (`two runners at once apply each version once, 50 times in a row`); `core/src/migration/dialect.ts:234,359,430` (`locks: true`). |
 | 3 | Migration constraint names work with changeset defaults (tested) | verified | Read the unit and end-to-end tests. | `core/src/migration/names.test.ts:16` (`migration names pair with changeset defaults`). `migration/index.ts:140` covers unique, FK and check end to end. `:187` covers a long name shortened to still match. |
 | 4 | CLI tested via the built binary; `--help` snapshot | verified | Read the itest. It spawns `packages/cli/dist/bin.js` in a temp project for each command. The help text is an inline snapshot, and the binary's output is compared with it. | `packages/cli/test/cli.itest.ts:24,136-147` (`egon, the built binary > --help prints the help and exits 0`), plus migrate create/migrate/migrations/rollback, `--dry-run`, `--json`, the failing migration, the loader and `db create/reset/drop` with the production guard (l.358). Snapshot: `packages/cli/src/cli.test.ts:72`. CI: `cli:integration test/cli.itest.ts (7 tests)` passed. |
@@ -666,12 +682,12 @@ Findings
 | 2 | 100% of public exports in API reference and referenced from a guide | verified with caveat | Read `typedoc.json` and `typedoc-plugin.mjs`: `notDocumented` + `treatWarningsAsErrors`, and the plugin errors on a missing `@example`. Read check 5 of `check-docs.mjs`. A one-off script, reusing that script's helpers, counted coverage by page section. | 381 exports from 8 entry points. Every export appears on some written page (guide, recipes, reference or internals). Only 124 appear in `guide/` or `recipes/`. 257 do not, mostly types, plus 10 values (`createAdapter`, `createDatabase`, `dropDatabase`, `parseMigrationFileName`, six `VERSION`s), which appear only on reference pages. Types count as covered by the generated `reference/exports.md` (Deviation 3, owner-accepted per `status/20.md:187-190`). `egon-orm/messages` is a public export (`packages/core/package.json` exports) and a TypeDoc entry point, but it is missing from `ENTRY_POINTS` in `scripts/check-docs.mjs:44-53`, so check 5 does not cover it. Its two exports are in fact listed in `exports.md` and named on `guide/edge.md` / `reference/errors.md`. |
 | 3 | Coming from Drizzle/Sequelize/Prisma complete; no positioning against the design reference (CI grep) | verified | Read `coming-from-prisma.md` in full. Counted tasks and sections on all three pages. Ran `git grep -i -w` for the name outside `docs/plan`. Check 4 runs in `pnpm lint`. | Each page has 22 `###` tasks, a "Not supported, and what to do instead" table and a "What works differently" section. The Egon side is `docs/site/examples/coming-from.ts`, marked `// @run` and executed by `docs:integration` in CI. Name hits outside docs/plan: only CLAUDE.md (instructions), `docs/adr/0002-kysely-backend.md:205,206,270` (an internal ADR, not in the site or check scope) and the check's own test. |
 | 4 | Fresh-eyes test passes with no unresolved findings; transcript summarised | unverified | Read the status note only. The repo holds no transcript, and the test cannot be re-run within this audit's rules. My own read of Getting started found no gap that would block a reader. | `docs/plan/status/20.md:366-…` summarises three runs (21, 16, 11 findings) and the round-5 reviewer's reruns. This rests on the note alone. |
-| 5 | Site builds with zero warnings and deploys from `main` | **false** | Pulled the `build` job log of Docs run 40123401469 (main, c2088d6). Queried the Pages API. | Deploys: Pages `build_type: workflow`, `html_url https://egon-orm.github.io/egon-orm/`, and the `deploy` job succeeded. Warnings: the log has Vite's `(!) Some chunks are larger than 500 kB after minification` during `vitepress build`. Nothing in `docs/site/package.json` `build` or the workflow fails on warnings. |
+| 5 | Site builds with zero warnings and deploys from `main` | **false** | Pulled the `build` job log of Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469) (main, c2088d6). Queried the Pages API. | Deploys: Pages `build_type: workflow`, `html_url https://egon-orm.github.io/egon-orm/`, and the `deploy` job succeeded. Warnings: the log has Vite's `(!) Some chunks are larger than 500 kB after minification` during `vitepress build`, and the `deploy` job prints `(node:1956) [DEP0040] DeprecationWarning: The punycode module is deprecated` (from `actions/deploy-pages`, not from the site build; my local `docs:build` does not print it). Nothing in `docs/site/package.json` `build` or the workflow fails on warnings. |
 
 Docs-quality reading. I read these pages in full: `guide/coming-from-prisma.md`, `guide/transactions.md`, `guide/getting-started.md`, `guide/batch.md`, and the first 60 lines of `guide/testing.md`. I spot-read the section and task lists of `coming-from-drizzle.md` and `coming-from-sequelize.md`. Judgement: the pages are task-oriented and accurate against the code I verified above. For example, transactions.md's savepoint naming, the refusal of `isolation`/`readOnly`/`retries` on nested calls, the queueing and use-after-completion rules, and `warnOnRootUseInTransaction` all match the tests in `transaction.test.ts`. testing.md states the sandbox limits the spec asks for. The explicit-`tx` rule has its own section with a wrong/right example. Every TypeScript block is a snippet include. The pages do not follow the Part A page template headings literally: there is no "Overview" or "Quick example" heading, and the pages open with an example and a "Good to know" tip. I found no stale "CLI not out yet" wording (grep).
 
 Findings
-- (medium) The site build is not warning-free on `main`. Vite's chunk-size warning appears in Docs run 40123401469. The status note claims "the build has no warnings" (`status/20.md`, Part A, edit links bullet). Nothing would catch a new warning either.
+- (medium) The site build is not warning-free on `main`. Vite's chunk-size warning appears in Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469). The status note claims "the build has no warnings" (`status/20.md`, Part A, edit links bullet). Nothing would catch a new warning either.
 - (low) `egon-orm/messages` is missing from `check-docs.mjs` `ENTRY_POINTS` (l.44-53), though `scripts/api-index.ts:24` and `typedoc.json` include it. A new export there would not be flagged by check 5.
 - (low) "Referenced from a guide" is met only in the owner-accepted reading. 257 of 381 exports (247 types, 10 values) appear on no `guide/` or `recipes/` page. The 10 values appear only on reference pages, and the types only in the generated index.
 - (low) The fresh-eyes result cannot be re-checked: no transcript or log is kept in the repo.
@@ -686,7 +702,7 @@ Findings
 | 4 | `EgonError` alone from the packed tarball < 1 KB; size report (min+gzip) in status note | verified with caveat | Read `scripts/size-report.mjs` and the CI step; ran esbuild on the **source** (not the tarball) | The script packs `egon-orm` and `@egon-orm/postgres`, then bundles 6 cases, including "EgonError only". CI runs it into the job summary (`ci.yml:219`). I bundled `export { EgonError }` from `packages/core/src/index.ts` with esbuild 0.28.2 (minify, esm, neutral): **842 bytes**. Setup is consistent with the claim: `bundle: false` in every `packages/*/tsup.config.ts`, `sideEffects: false` in every package.json. The table is in `docs/plan/status/21a.md` ("Size report"; EgonError 0.7 KB / 0.5 KB). Caveat: no local `dist`, so I did not reproduce the number from the tarball, and the CI job summary cannot be read from the CLI. |
 | 5 | No bare `net`/`tls`/built-in specifier in any dist | verified | Read the configs, the checker and the CI step; grepped sources | `removeNodeProtocol: false` in all 6 tsup configs. `scripts/check-node-specifiers.mjs` scans `packages/*/dist/**/*.js` against `builtinModules`. CI job `build+publint+attw` runs it (`ci.yml:99`), green on c2088d6. `postgres/src/cancel.ts:43` loads lazily with `import("node:net")` / `import("node:tls")`. No bare built-in import in any `packages/*/src`. |
 | 6 | Every thrown message has an id and docs entry (checked); default has no fix text; opt-in restores it (Node + Worker) | verified with caveat | Read `scripts/error-docs.ts` and `errors.test.ts`; scanned all 659 short messages on the generated pages | The `--check` mode runs inside `pnpm docs:check`, which `pnpm lint` calls. It fails when an id has no catalog entry, an entry is thrown nowhere, an entry has empty advice, a `{{param}}` is missing, or a page is stale (`scripts/error-docs.ts:274-330`). Constructors require a typed `ErrorId` (`errors.ts:240,565,588,734`). No short message contains an imperative such as Use/Add/Pass/Call/Declare/Set/Try. Node: `errors.test.ts` > "every error class" > "...message is its identifier, a short sentence and the docs link", plus `messages/index.test.ts`. Worker: `run.mjs` checks the short message, `explain` and `useFullErrorMessages` (all `ok`). Caveats in Findings 1 and 2. |
-| 7 | Error-code ADR accepted by the owner before part 4's mechanism is built | verified with caveat | Read the ADR; listed PR #57's commit order | `docs/adr/0007-error-identifiers-and-full-messages.md`: "Status: accepted (by the owner on 2026-10-21...)". PR #57 commits: `07c24de` ADR 19:04, `36cf941` "ADR 0007 accepted by the owner" 19:14, `ccbcc95` amendment 19:26, then the first mechanism commit `0f42148` at 19:44. Caveat: acceptance is recorded by the worker's commit, not by an owner-authored artifact. |
+| 7 | Error-code ADR accepted by the owner before part 4's mechanism is built | verified with caveat | Read the ADR; listed PR [#57](https://github.com/egon-orm/egon-orm/pull/57)'s commit order | `docs/adr/0007-error-identifiers-and-full-messages.md`: "Status: accepted (by the owner on 2026-10-21...)". PR [#57](https://github.com/egon-orm/egon-orm/pull/57) commits: `07c24de` ADR 19:04, `36cf941` "ADR 0007 accepted by the owner" 19:14, `ccbcc95` amendment 19:26, then the first mechanism commit `0f42148` at 19:44. Caveat: acceptance is recorded by the worker's commit, not by an owner-authored artifact. |
 | 8 | `JSON.stringify(error)` is `{ name, code, id }` for every error class (tested) | verified | Read `toJSON` and the test table; listed every exported error class | `errors.ts:257` returns `{ name, code, id }`. `errors.test.ts:60-103` `EVERY_ERROR` covers all 12 `EgonError` subclasses exported from `errors.ts`. `test.each` "JSON.stringify(%o) gives only its name, code and identifier" asserts `toStrictEqual` and key order. "JSON leaves out the message, the cause and the SQL" covers the rest. |
 | 9 | `pnpm check`, integration (both tiers), lint:packages, smoke, docs:build pass; no check weakened | verified with caveat | Read CI job conclusions on c2088d6; sampled the gates | Every required job passed on c2088d6: `lint`, `typecheck`, `unit+types` (node 22, 24), `integration`, `integration (tier 2)`, `build+publint+attw` (build, node-specifier check, `lint:packages`, `pnpm smoke`), `docs:build`, `edge worker`. Coverage thresholds are still 95% (`vitest.config.ts:220-224`). Caveat: `pnpm check` passed in my run (§2); "no check weakened" was sampled, not audited diff by diff. See Finding 3. |
 | 10 | Benchmark and budget items | not run (step 19) | n/a | Deferred by owner decision of 2026-10-14. |
@@ -707,13 +723,13 @@ Findings
 | 3 | `JSON.parse(JSON.stringify(row))` deep-equals `row.toJSON()` for every type | verified | Read the tests | `roundTrip(value)` `toStrictEqual(toJSON(value))` on the every-type row, the nullable variant, nested preloads and changesets (`json.test.ts:222-231`, 258-279, 531-565). The value table is pinned per field type at `json.test.ts:145-163`. |
 | 4 | `Json<User>`, `Json<loaded>`, `JsonReturn<fn>` match runtime output for every part-3 case (type tests) | verified with caveat | Read `json-types.test-d.ts` against the part 3 list | Every part 3 case has a test: field mapping, getters and methods dropped, own `toJSON`, string/array/nested/`true` preload specs, more preloads assignable where fewer are expected, a getter returning a row, `LoadedAs` select, other values, plain bigint `never`, and `JsonReturn` of a row, an array, `\| null`, `Result`, an object of rows and `errorMessages()` (`packages/core/src/json-types.test-d.ts:106-345`). Plus a cold program, `json-return-cold.test-d.ts`. Caveats: (a) the type tests and the runtime tests use separate fixtures, so "matches the runtime" is checked by inspection; (b) owner-approved deviation: `row.toJSON()` is not typed as `Json` of the row; (c) see Finding 2. |
 | 5 | `errorMessages()` keys typed, with nested trees and extra keys | verified | Read `error-messages.test-d.ts` | `packages/core/src/error-messages.test-d.ts`: "is keyed by field, association and $base" (typo is a `@ts-expect-error`, :69); "nested trees: an object for a to-one association or embed, a list for a to-many one"; "collects the keys validations add"; extra keys through a write and a batch failure; `traverseErrors`. The exact form is shipped, not the fallback. |
-| 6 | No runtime cost outside `toJSON`: query/hydration paths unchanged | verified | Read the non-test source diff of squash commit `869b60a` (#60) | `repo/repo.ts` and `batch/batch.ts` changes are type-only (generic `E`, preload marker). The runtime changes are `schema/field.ts` (`virtual()`/`redact()` set `json` at definition time), `schema/schema.ts` (lazy cached `jsonTable()`, new `rowToJSON` import) and the new `schema/json.ts`. `hydrate.ts` and the compiler are untouched. `FieldMeta.json` is per schema, not per row. |
+| 6 | No runtime cost outside `toJSON`: query/hydration paths unchanged | verified | Read the non-test source diff of squash commit `869b60a` ([#60](https://github.com/egon-orm/egon-orm/pull/60)) | `repo/repo.ts` and `batch/batch.ts` changes are type-only (generic `E`, preload marker). The runtime changes are `schema/field.ts` (`virtual()`/`redact()` set `json` at definition time), `schema/schema.ts` (lazy cached `jsonTable()`, new `rowToJSON` import) and the new `schema/json.ts`. `hydrate.ts` and the compiler are untouched. `FieldMeta.json` is per schema, not per row. |
 | 7 | `pnpm check`, integration both tiers, lint:packages, smoke, docs:build pass; no check weakened | verified with caveat | Same CI evidence as 21a box 9 | All required jobs green on c2088d6, including `types (typescript minimum/latest)` and the smoke `JsonReturn` program (`examples/smoke/types/json-return.ts`). My local runs (§2) passed; "no check weakened" was sampled. |
 | 8 | Benchmark and budget items | not run (step 19) | n/a | Deferred by owner decision of 2026-10-14. |
 
 **Findings (21b)**
 
-1. (low) Spec naming: the spec asks for `ErrorMessages<…>`. The export is `ErrorMessagesOf` (`index.ts:40`), chosen because 21a had taken `ErrorMessages`. PR #62 later renamed 21a's type to `ErrorCatalog`, so the spec name is free again but unused. Cosmetic; the owner may want to settle the name before release.
+1. (low) Spec naming: the spec asks for `ErrorMessages<…>`. The export is `ErrorMessagesOf` (`index.ts:40`), chosen because 21a had taken `ErrorMessages`. PR [#62](https://github.com/egon-orm/egon-orm/pull/62) later renamed 21a's type to `ErrorCatalog`, so the spec name is free again but unused. Cosmetic; the owner may want to settle the name before release.
 2. (low) `Json` types `t.float()` and `t.integer()` as `number`, while the runtime writes `null` for `NaN` and `±Infinity` (`json.test.ts` "NaN and the infinities are null"). This is a small type/runtime mismatch, and it is also how `JSON.stringify` behaves.
 3. (low) Known gaps the status note admits, which I confirmed by reading: `Json<Map|Set>` lists `size`; on cyclic data `toJSON` throws `RangeError`, not `TypeError`; a row's `toJSON` writes any own property a user adds, which `Json` does not list.
 4. (info) The status-note claims I checked against the code held. The markers are string-keyed (`"~fields"`, `"~preloaded"`), not the declared unique symbols the spec asks for. This is recorded as owner decision 4 (2026-10-22).
@@ -724,21 +740,21 @@ None is data loss, an injection path or a hole in Egon's own code.
 
 | # | Severity | Issue | Blocks | Owner | Issue |
 |---|---|---|---|---|---|
-| P0 | **High** (process) | Release settings and repository governance not done: O1–O6 (§4.9). `main` is unprotected (the ruleset targets no branch), so `ci` is not required; #72 merged with a red tier-2 job | **0.1.0** | owner | proposed in §10 |
+| P0 | **High** (process) | Release settings and repository governance not done: O1–O6 (§4.9). `main` is unprotected (the ruleset targets no branch), so `ci` is not required and any merge method is allowed | **0.1.0** | owner | proposed in §10 |
 | P1 | **Medium** | `@egon-orm/zod` peer `zod: ^4.3.0` admits Zod ≤ 4.6.5 (GHSA-mrhx-c7xc-m3w5, high upstream: memory exhaustion on large arrays); `toZod` emits uncapped `z.array()` for embedded lists (`packages/zod/src/to-zod.ts:226`); the workspace pins 4.6.5 (`packages/zod/package.json:50`, `examples/blog`, `benchmarks`, `docs/site`) | **0.1.0** (recommended) | owner decision (peer range), then 21-packaging's area | proposed in §10 |
-| P2 | Medium | Postgres 14 is the stated minimum (`upgrading.md:87`, `CHANGELOG.md:17`, `guide/adapters.md:35`, `getting-started.md:51`, `tutorial.md:62`) but only 16 runs in CI; the same for MySQL 8.0.31 (8.4 in CI). `upgrading.md`'s "Tested in CI" column is honest; the guides do not say it | should before 0.1.0 | owner | proposed in §10 |
+| P11 | Medium | The 50 ms per-expression budget, a `0.1.0` gate, is not met: the first expression a program checks takes 53–55 ms (one-time); the owner accepted only the completions miss (§4.2) | **0.1.0** (owner decision) | owner | §10 item 5a |
+| P2 | Medium | Postgres 14 is the stated minimum (`upgrading.md:87`, `CHANGELOG.md:17`, `guide/adapters.md:35`, `getting-started.md:4` and `:51`, `tutorial.md:62`) but only 16 runs in CI; the same for MySQL 8.0.31 (8.4 in CI). `upgrading.md`'s "Tested in CI" column is honest; the guides do not say it | should before 0.1.0 | owner | proposed in §10 |
 | P3 | Medium | F4: `inspect(error)` shows `detail` and the cause, which may quote a redacted value | 1.0 (owner decision) | owner / core errors | proposed in §10 |
 | P4 | Medium (accepted) | Completions over 200 ms at about 140–170 connected schemas (§4.2) | 1.0 (proposed) | owner / types | roadmap row; proposed issue in §10 |
 | P5 | Low–Medium | Untested logic survivors estimated by sample: query about 106 (42–237), compiler about 35 (14–78) | 1.0 (proposed) | query, compiler | proposed in §10 |
 | P6 | Low | TypeScript `next` (7.1-dev): TS5088 on `export const errors = cs.errorMessages()` with `declaration: true` (ours); TS5115 inside Zod (theirs) | before TS 7.1 ships | changeset types | proposed in §10 |
 | P7 | Low | 44 dev-only advisories (11 high) in vitepress/vite, miniflare/undici/sharp, verdaccio/body-parser, tsup/esbuild, Stryker/qs, fast-uri; none in a published package | no | 21-packaging's area | proposed in §10 |
-| P8 | Low | Docs build not warning-free (chunk-size), and nothing fails on a warning; `status/20.md` says "no warnings" | no | docs | proposed in §10 |
+| P8 | Low | Docs build not warning-free (Vite chunk-size; the deploy job also prints a `punycode` DEP0040 warning from `actions/deploy-pages`), and nothing fails on a warning; `status/20.md` says "no warnings" | no | docs | proposed in §10 |
 | P9 | Low | Leak assertions missing from the write, preload and nested conformance suites; no global teardown check (box 11.5) | no | core test support | proposed in §10 |
 | P10 | Low | Pre-release wording: "under construction, nothing is published to npm yet" in `README.md:4,25`, `docs/site/index.md:29`, `guide/index.md:4,69`, `reference/roadmap.md:3,16`; and the date of "0.1.0 (unreleased)" in `CHANGELOG.md` | at release | owner / docs | part of the release checklist (§10) |
-| P11 | Low | First statement checked in a program takes about 55 ms (over 50 ms by the letter); one-time | no | types | covered by P4's issue |
 | P12 | Low | Node 22.12.0 prints `ExperimentalWarning` for `require()` of the ES modules (22.23.1 prints none); not mentioned in the getting-started note on CommonJS | no | docs | proposed in §10 |
 | P13 | Low | Test-strength gaps found while re-verifying (each with evidence in §6): `changeset/sharing.test.ts:101` boundary test does not recurse into `nested/` and `validators/`; the builder immutability test leaves out about a dozen methods (`builder.test.ts:1167-1210`); five preload loading cases have no query count (`preload/index.ts:779,909,939,1115,1132`); `check-docs.mjs` `ENTRY_POINTS` misses `egon-orm/messages` (`scripts/check-docs.mjs:44-53`); about 150 plain `TypeError`/`Error` throws (option checks) have no error identifier; `CliError` is not an `EgonError`; the sandbox is used by the write suite only | no | the owning areas | proposed in §10 (one umbrella issue) |
-| P14 | Info | Naming and typing notes: `ErrorMessagesOf` could now be `ErrorMessages` (freed by #62); `Json` types floats as `number` though `NaN`/`±Infinity` serialise as `null`; the validator-promise error has id `query.validatorPromise` though it is a changeset error | no | owner (API names) | in §10 |
+| P14 | Info | Naming and typing notes: `ErrorMessagesOf` could now be `ErrorMessages` (freed by [#62](https://github.com/egon-orm/egon-orm/pull/62)); `Json` types floats as `number` though `NaN`/`±Infinity` serialise as `null`; the validator-promise error has id `query.validatorPromise` though it is a changeset error | no | owner (API names) | in §10 |
 | P15 | Info | Not exercised before a real publish: npm provenance and trusted publishing, the release workflow's jobs on GitHub, the weekly soak workflow | first publish | owner | release checklist |
 
 ## 8. Proposed gate for 1.0
@@ -749,9 +765,9 @@ Everything here would be checked the same way as this report: re-verified, with 
    that leaves out `detail` and shows the cause on one line; `secrets.itest.ts:210-211` flips
    to `not.toContain(SECRET)`.
 2. **Editor completions under 200 ms on the 200-schema project** in every connected topology
-   (chain, tree, hub), measured with `scripts/type-health/measure.mjs`, and no statement but the
-   first over 50 ms. Make the 50 ms budget's first-statement exception explicit, or meet it.
-3. **Query and compiler survivors triaged one by one**, as the changeset area was (#74), with a
+   (chain, tree, hub), measured with `scripts/type-health/measure.mjs`, and every
+   expression within the 50 ms budget as the owner defines it for `0.1.0` (P11).
+3. **Query and compiler survivors triaged one by one**, as the changeset area was ([#74](https://github.com/egon-orm/egon-orm/pull/74)), with a
    test for every real gap; re-run Stryker on all three areas at the 1.0 candidate, each ≥ 80%
    with no untriaged logic survivor.
 4. **Step 19 done**: the published benchmark run against the README §7 budgets.
@@ -832,7 +848,14 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      util.inspect(error) prints it (pinned by packages/postgres/test/secrets.itest.ts:210).
      Give both errors a custom inspect that leaves out detail and shows the cause as one
      line; keep the properties readable; flip the test."
-5. **Editor completions (P4, P11).** Accepted for `0.1.0`. Proposal: make it a 1.0 gate (§8.2).
+5a. **The 50 ms per-expression budget (P11), a `0.1.0` gate.** The first expression a
+   program checks takes 53–55 ms; all others are under 30 ms. Options: (1) accept the miss
+   for `0.1.0`, as with completions; (2) define the budget as excluding the one-time cost of
+   the first expression checked (the cost moves to whichever expression is checked first,
+   `status/21-api.md` §3), which then meets it. Recommendation: (2), since the first-expression
+   cost is fixed per program and not a property of any query; record it in `21-release.md`'s
+   owner decisions.
+5. **Editor completions (P4).** Accepted for `0.1.0`. Proposal: make it a 1.0 gate (§8.2).
    - *Proposed issue:* "Faster editor completions in large connected models". *Body:*
      "Completions in a where callback cost about 40 ms plus 1.1–1.2 ms per schema reachable
      through associations: 230–239 ms at 200 (chain, tree, hub), 189 ms at 150 (2026-10-24,
@@ -840,11 +863,14 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      inferring every static member of every reachable schema (status/21-api.md §3). Make
      the association types read declared metadata and expand only where preload is used.
      Workaround in the FAQ."
-6. **Query and compiler survivors (P5).** Proposal: 1.0 work and a 1.0 gate (§8.3), not a
-   `0.1.0` gate.
+6. **Query and compiler survivors (P5).** Owner decision 4 (2026-10-23) made only the
+   changeset survivors a `0.1.0` gate; the query and compiler survivors were sampled, not
+   triaged. Asked: **accept explicitly** that `0.1.0` ships with about 106 (42–237) untested
+   query behaviours and about 35 (14–78) compiler ones, as estimated. Proposal: 1.0 work and a
+   1.0 gate (§8.3).
    - *Proposed issue:* "Triage every logic mutation survivor in query/ and compiler/".
      *Body:* "Sampled estimates (status/21-robustness.md §4): about 106 (42–237) untested
-     behaviours in query/, about 35 (14–78) in compiler/. Do what #74 did for changeset/:
+     behaviours in query/, about 35 (14–78) in compiler/. Do what [#74](https://github.com/egon-orm/egon-orm/pull/74) did for changeset/:
      classify each of the 798 and 264 logic survivors, test each real gap against its
      hand-applied mutant, and re-run Stryker."
 7. **TypeScript next (P6).**
@@ -861,7 +887,7 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      release old enough for minimumReleaseAge exists."
 9. **Docs build warning (P8).**
    - *Proposed issue:* "Make the docs build warning-free and fail on warnings". *Body:*
-     "vitepress build prints Vite's chunk-size warning (Docs run 40123401469); step 20's
+     "vitepress build prints Vite's chunk-size warning (Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469)); step 20's
      acceptance says zero warnings. Split the chunk or set the limit deliberately, then fail
      the build on any warning."
 10. **Leak assertions (P9).**
@@ -879,13 +905,36 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
 13. **Node 22.12 warning (P12).** Recommendation: one sentence in getting-started's
     CommonJS note that early 22.x releases print an ExperimentalWarning for require() of an ES module.
 
+## Review round 1 (PR [#76](https://github.com/egon-orm/egon-orm/pull/76))
+
+1. **"[#72](https://github.com/egon-orm/egon-orm/pull/72) merged with tier 2 red" was wrong.** On [#72](https://github.com/egon-orm/egon-orm/pull/72)'s head `5616c0c`, run [39985031082](https://github.com/egon-orm/egon-orm/actions/runs/39985031082):
+   attempt 1 failed only `peer bounds (lower)` (and `ci` with it); attempt 2 was green,
+   tier 2 and `ci` included, and the merge came two minutes later (16:22:26Z). The red tier 2
+   was `main`'s post-merge run [39986225471](https://github.com/egon-orm/egon-orm/actions/runs/39986225471) on `8b1aeea`: the close race fixed in [#73](https://github.com/egon-orm/egon-orm/pull/73). Removed
+   as evidence from O4, P0 and the step 17 finding. P0 stands without it: `main` is still
+   unprotected.
+2. **The 50 ms budget** is now an unmet `0.1.0` gate that needs the owner's decision (§1 item
+   3, §4.2, P11 Medium, §10 item 5a), not a Low item or a 1.0 aside; type health is "Not ready"
+   until it is decided.
+3. Step 10 box 5: the dynamic `node:fs/promises`, `node:path`, `node:url` imports of
+   `migration/loader.ts` added to the evidence.
+4. Step 10 box 4: `EGON_PROPERTY_RUNS` replaces the count, so it can lower it too.
+5. Step 01 box 6 (`pnpm bench`): classified from CI (green in `build+publint+attw`) as
+   verified with caveat, not "not run (step 19)"; counts updated.
+6. Query and compiler survivors: stated as sampled, not triaged, by owner decision 4 of
+   2026-10-23; their explicit acceptance is asked for in §10 item 6.
+7. Step 20 box 5: the deploy job's `punycode` DEP0040 warning added.
+8. P2: `getting-started.md:4` added.
+9. §4.7: the `dependencies` field is absent, not empty.
+10. Run IDs and PR numbers are links.
+
 ## Requests
 
 - **To 21-security's note (finished):** its F5 row and its audit numbers are superseded
-  (F5 fixed in #72; `pnpm audit --prod` now reports the Zod advisory, `pnpm audit` 44). I did
+  (F5 fixed in [#72](https://github.com/egon-orm/egon-orm/pull/72); `pnpm audit --prod` now reports the Zod advisory, `pnpm audit` 44). I did
   not edit it.
 - **To 21-robustness's note (finished):** its summary table still gives the changeset score
-  as 83.14%; #74 measured 88.14%. Not edited.
+  as 83.14%; [#74](https://github.com/egon-orm/egon-orm/pull/74) measured 88.14%. Not edited.
 - **To `status/17.md` and `status/20.md` (finished):** "Both are required through `ci`" and
   "the build has no warnings" are false today (§6). Not edited.
 
