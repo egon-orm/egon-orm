@@ -16,7 +16,9 @@ import type { AnyFieldBuilder, AnySchema, AssocMeta, FieldMeta, Row, RowMeta } f
 import { ROW } from "../contracts/schema.js";
 import { InvalidChangesetError, QueryError } from "../errors.js";
 import { deepEqual } from "../internal/deep-equal.js";
+import { distinct } from "../internal/distinct.js";
 import { formatStruct, formatValue, redactFields } from "../internal/inspect.js";
+import { own } from "../internal/own.js";
 import { meta } from "../schema/index.js";
 import { fieldConverter, fieldValueJson, jsonValue, safeJsonValue } from "../schema/json.js";
 import { booleanType } from "../types/index.js";
@@ -833,7 +835,7 @@ export class Changeset<
    * Adds `can't be blank` to each field that has no value in the changes **or** the data:
    * `undefined`, `null`, or a string of only whitespace (`trim: false` counts only `""`).
    * A field that already has an error is skipped, and the change of a field found missing
-   * is removed.
+   * is removed. A name listed twice is checked once.
    *
    * With no list, it checks every stored field that is not nullable and has no default,
    * no generator and no database-generated value.
@@ -856,8 +858,9 @@ export class Changeset<
         "validateRequired() takes a field name or a list of them.",
       );
     }
-    checkMessage(options?.message, "validateRequired");
-    const trim = options?.trim !== false;
+    const message = own(options, "message");
+    checkMessage(message, "validateRequired");
+    const trim = own(options, "trim") !== false;
     const changes = this.changes as Values;
     let missing: string[] | undefined;
     const count = typeof names === "string" ? 1 : names.length;
@@ -865,15 +868,16 @@ export class Changeset<
       const name = typeof names === "string" ? names : (names[i] as string);
       const field = fieldOf(spec, name, "validateRequired");
       const value = hasOwn(changes, name) ? changes[name] : currentValue(spec, this.data, field);
+      // A name listed twice is checked once: one error (owner decision, 2026-10-24).
       if (isBlank(value, trim) && !hasOwn(this.errors, name)) {
-        missing ??= [];
-        missing.push(name);
+        if (missing === undefined) missing = [name];
+        else if (!missing.includes(name)) missing.push(name);
       }
     }
     if (missing === undefined) {
       return this.#validated(names, "required", options, changes, this.errors, this.valid);
     }
-    const error = errorOf(messageOf(options?.message, BLANK, EMPTY), "required", EMPTY);
+    const error = errorOf(messageOf(message, BLANK, EMPTY), "required", EMPTY);
     let nextChanges = changes;
     let errors = this.errors;
     for (const name of missing) {
@@ -898,14 +902,15 @@ export class Changeset<
     if (!(pattern instanceof RegExp)) {
       throw new QueryError("query.formatPattern", "validateFormat() takes a regular expression.");
     }
-    checkMessage(options?.message, "validateFormat");
+    const message = own(options, "message");
+    checkMessage(message, "validateFormat");
     const value = this.#changed(field);
     let error: ChangesetError | undefined;
     if (value !== undefined && value !== null) {
       if (typeof value !== "string") throw notOfType("validateFormat", field, "a string");
       // `search` ignores and restores `lastIndex`, so a global or sticky pattern behaves.
       if (value.search(pattern) === -1) {
-        error = errorOf(messageOf(options?.message, "has invalid format", EMPTY), "format", EMPTY);
+        error = errorOf(messageOf(message, "has invalid format", EMPTY), "format", EMPTY);
       }
     }
     return this.#check(field, "format", options, field, error, "pattern", pattern);
@@ -962,12 +967,13 @@ export class Changeset<
       throw new QueryError("query.inclusionValues", `${fn}() takes the values as an array.`, {
         params: { fn },
       });
-    checkMessage(options?.message, fn);
+    const message = own(options, "message");
+    checkMessage(message, fn);
     const value = this.#changed(name);
     let error: ChangesetError | undefined;
     if (value !== undefined && value !== null && includes(field, values, value) !== wanted) {
       const meta = { enum: values };
-      error = errorOf(messageOf(options?.message, fallback, meta), validation, meta);
+      error = errorOf(messageOf(message, fallback, meta), validation, meta);
     }
     return this.#check(name, validation, options, name, error, "values", values);
   }
@@ -991,7 +997,8 @@ export class Changeset<
     fieldOf(this.#spec, field, "validateSubset");
     if (!Array.isArray(values))
       throw new QueryError("query.subsetValues", "validateSubset() takes the values as an array.");
-    checkMessage(options?.message, "validateSubset");
+    const message = own(options, "message");
+    checkMessage(message, "validateSubset");
     const value = this.#changed(field);
     let error: ChangesetError | undefined;
     if (value !== undefined && value !== null) {
@@ -999,7 +1006,7 @@ export class Changeset<
       for (const element of value) {
         if (!values.some((allowed) => allowed === element || deepEqual(allowed, element))) {
           const meta = { enum: values };
-          error = errorOf(messageOf(options?.message, "has an invalid entry", meta), "subset", meta);
+          error = errorOf(messageOf(message, "has an invalid entry", meta), "subset", meta);
           break;
         }
       }
@@ -1030,21 +1037,24 @@ export class Changeset<
     if (typeof options !== "object" || options === null) {
       throw new QueryError("query.lengthOptions", "validateLength() takes its limits as an object.");
     }
-    const { is, min, max } = options;
+    const is = own(options, "is");
+    const min = own(options, "min");
+    const max = own(options, "max");
     if (is === undefined && min === undefined && max === undefined) {
       throw new QueryError("query.lengthNoLimit", "validateLength() needs at least one of is, min and max.");
     }
     checkLimit(is);
     checkLimit(min);
     checkLimit(max);
-    const count = options.count ?? "graphemes";
+    const count = own(options, "count") ?? "graphemes";
     if (count !== "graphemes" && count !== "codepoints" && count !== "bytes") {
       throw new QueryError(
         "query.lengthCount",
         'validateLength(): count must be "graphemes", "codepoints" or "bytes".',
       );
     }
-    checkMessage(options.message, "validateLength");
+    const message = own(options, "message");
+    checkMessage(message, "validateLength");
     const value = this.#changed(field);
     let error: ChangesetError | undefined;
     if (value !== undefined && value !== null) {
@@ -1075,7 +1085,7 @@ export class Changeset<
       if (kind !== undefined) {
         const limit = kind === "is" ? is : kind === "min" ? min : max;
         const meta = { count: limit, kind, type };
-        error = errorOf(messageOf(options.message, LENGTH_MESSAGES[type][kind], meta), "length", meta);
+        error = errorOf(messageOf(message, LENGTH_MESSAGES[type][kind], meta), "length", meta);
       }
     }
     return this.#check(field, "length", options, field, error);
@@ -1117,7 +1127,8 @@ export class Changeset<
     if (limits === 0) {
       throw new QueryError("query.numberNoLimit", "validateNumber() needs at least one limit.");
     }
-    checkMessage(options.message, "validateNumber");
+    const message = own(options, "message");
+    checkMessage(message, "validateNumber");
     const value = this.#changed(field);
     let error: ChangesetError | undefined;
     if (value !== undefined && value !== null) {
@@ -1131,7 +1142,7 @@ export class Changeset<
         const check = NUMBER_CHECKS[kind];
         if (Number.isNaN(value) || !check[0](value, limit)) {
           const meta = { kind, number: limit };
-          error = errorOf(messageOf(options.message, check[1], meta), "number", meta);
+          error = errorOf(messageOf(message, check[1], meta), "number", meta);
           break;
         }
       }
@@ -1160,7 +1171,8 @@ export class Changeset<
     options?: ConfirmationOptions,
   ): WithErrorKey<this, `${K}Confirmation`> {
     const meta = fieldOf(this.#spec, field, "validateConfirmation");
-    checkMessage(options?.message, "validateConfirmation");
+    const message = own(options, "message");
+    checkMessage(message, "validateConfirmation");
     const key = `${field}Confirmation`;
     const params = this.params;
     const value = this.#changed(field);
@@ -1169,14 +1181,10 @@ export class Changeset<
       // A key holding undefined counts as absent, as it does in cast.
       if (hasOwn(params, key) && params[key] !== undefined) {
         if (!confirms(meta, params[key], value)) {
-          error = errorOf(
-            messageOf(options?.message, "does not match confirmation", EMPTY),
-            "confirmation",
-            EMPTY,
-          );
+          error = errorOf(messageOf(message, "does not match confirmation", EMPTY), "confirmation", EMPTY);
         }
-      } else if (options?.required === true) {
-        error = errorOf(messageOf(options.message, BLANK, EMPTY), "required", EMPTY);
+      } else if (own(options, "required") === true) {
+        error = errorOf(messageOf(message, BLANK, EMPTY), "required", EMPTY);
       }
     }
     return this.#check(field, "confirmation", options, key, error) as WithErrorKey<this, `${K}Confirmation`>;
@@ -1197,13 +1205,14 @@ export class Changeset<
     options?: MessageOptions,
   ): WithErrorKey<this, Exclude<K, FieldName<S>>> {
     checkErrorKey(key, "validateAcceptance");
-    checkMessage(options?.message, "validateAcceptance");
+    const message = own(options, "message");
+    checkMessage(message, "validateAcceptance");
     const params = this.params;
     let error: ChangesetError | undefined;
     if (params !== null) {
       const accepted = hasOwn(params, key) ? ACCEPTANCE.cast(params[key]) : undefined;
       if (accepted === undefined || !accepted.success || accepted.data !== true) {
-        error = errorOf(messageOf(options?.message, "must be accepted", EMPTY), "acceptance", EMPTY);
+        error = errorOf(messageOf(message, "must be accepted", EMPTY), "acceptance", EMPTY);
       }
     }
     return this.#check(key, "acceptance", options, key, error) as WithErrorKey<
@@ -1487,7 +1496,7 @@ export class Changeset<
   /**
    * Declares a unique constraint: if the database rejects the write because of it, the
    * repo reports `has already been taken` on the (first) field instead of throwing. The
-   * default name is `<table>_<column(s)>_key`.
+   * default name is `<table>_<column(s)>_key`; a field listed twice is one column of it.
    *
    * @example
    * ```ts
@@ -1505,7 +1514,7 @@ export class Changeset<
         "uniqueConstraint() takes a field name or a non-empty list of them.",
       );
     }
-    const columns = names.map((name) => fieldOf(this.#spec, name, "uniqueConstraint").column);
+    const columns = distinct(names).map((name) => fieldOf(this.#spec, name, "uniqueConstraint").column);
     return this.#constraint(
       "unique",
       names[0] as string,
@@ -1616,10 +1625,11 @@ export class Changeset<
    */
   checkConstraint(field: FieldName<S>, options: CheckConstraintOptions): this {
     fieldOf(this.#spec, field, "checkConstraint");
-    if (typeof options?.name !== "string" || options.name === "") {
+    const name = own(options, "name");
+    if (typeof name !== "string" || name === "") {
       throw new QueryError("query.checkConstraintName", "checkConstraint() needs the constraint's name.");
     }
-    return this.#constraint("check", field, () => options.name, "is invalid", options, "checkConstraint");
+    return this.#constraint("check", field, () => name, "is invalid", options, "checkConstraint");
   }
 
   /**
@@ -1678,22 +1688,24 @@ export class Changeset<
     if (options !== undefined && (typeof options !== "object" || options === null)) {
       throw new QueryError("query.constraintOptions", `${fn}(): the options must be an object.`);
     }
-    const name = options?.name ?? defaultName();
+    const name = own(options, "name") ?? defaultName();
     if (typeof name !== "string" || name === "")
       throw new QueryError("query.constraintName", `${fn}(): name must be a non-empty string.`);
-    const match = options?.match ?? "exact";
+    const match = own(options, "match") ?? "exact";
     if (match !== "exact" && match !== "suffix" && match !== "prefix") {
       throw new QueryError("query.constraintMatch", `${fn}(): match must be "exact", "suffix" or "prefix".`);
     }
-    if (options?.message !== undefined && typeof options.message !== "string") {
+    const custom = own(options, "message");
+    if (custom !== undefined && typeof custom !== "string") {
       throw new QueryError("query.constraintMessage", `${fn}(): message must be a string.`);
     }
+    const errorKey = own(options, "errorKey");
     const constraint: Constraint = Object.freeze({
       type,
       name,
       match,
-      field: options?.errorKey === undefined ? field : checkErrorKey(options.errorKey, fn),
-      message: options?.message ?? message,
+      field: errorKey === undefined ? field : checkErrorKey(errorKey, fn),
+      message: custom ?? message,
     });
     return construct(
       this.#spec,
@@ -1814,7 +1826,8 @@ export class Changeset<
     repo: unknown,
     options?: UniqueAsyncOptions,
   ): Promise<this> {
-    const names: readonly string[] = typeof fields === "string" ? [fields] : fields;
+    const given: readonly string[] = typeof fields === "string" ? [fields] : fields;
+    const names = Array.isArray(given) ? distinct(given) : given;
     try {
       for (const name of names) fieldOf(this.#spec, name, "validateUniqueAsync");
     } catch (error) {
@@ -2186,7 +2199,8 @@ type ClassOrRow<T> = [ClassOf<T>] extends [never]
  *
  * - `target` is a schema class (a new record), a loaded row (an update), a changeset
  *   (adds more input to it), or `{ data, types }` for a changeset without a schema class.
- * - Keys that are not permitted are ignored. `""` becomes `null` (`emptyValues`).
+ * - Keys that are not permitted are ignored. `""` becomes `null` (`emptyValues`). A name
+ *   permitted twice is cast once.
  * - A value the type rejects adds `is invalid`; `null` on a field that is not nullable
  *   adds `can't be blank`. Neither records a change.
  *
@@ -2239,10 +2253,10 @@ export function cast(
   if (!Array.isArray(permitted)) {
     throw new QueryError("query.castPermitted", "cast() takes the permitted field names as an array.");
   }
-  const emptyValues = options?.emptyValues ?? DEFAULT_EMPTY_VALUES;
+  const emptyValues = own(options, "emptyValues") ?? DEFAULT_EMPTY_VALUES;
   if (!Array.isArray(emptyValues))
     throw new QueryError("query.castEmptyValues", "cast(): emptyValues must be an array.");
-  const force = options?.forceChanges === true;
+  const force = own(options, "forceChanges") === true;
   const base = target instanceof Changeset ? (target as AnyChangeset) : undefined;
   const { spec, data } =
     base === undefined ? startOf(target, "cast") : { spec: specOf(base), data: base.data as object | null };
@@ -2251,6 +2265,9 @@ export function cast(
   let errors: Errors = base === undefined ? NO_ERRORS : base.errors;
   let valid = base === undefined ? true : base.valid;
 
+  // Errors are appended without repeats: over an earlier changeset an error it already has
+  // is not added again, and a name permitted twice gives its error once (owner decision,
+  // 2026-10-24). Casting a repeated name again records the same change, so it adds nothing.
   for (const name of permitted) {
     const field = fieldOf(spec, name, "cast");
     if (spec.embeds.has(name)) {
@@ -2262,20 +2279,22 @@ export function cast(
     if (emptyValues.includes(value)) value = null;
     if (value === null) {
       if (!field.nullable) {
-        errors = appendErrors(errors, name, [NOT_NULL], base !== undefined);
+        errors = appendErrors(errors, name, [NOT_NULL], true);
         valid = false;
         continue;
       }
     } else {
       const result = field.type.cast(value);
       if (!result.success) {
+        // A failure such as the built-in INVALID has no message or meta of its own.
+        const failureMeta = own(result, "meta");
         const meta =
-          result.meta === undefined ? { type: field.type.name } : { type: field.type.name, ...result.meta };
+          failureMeta === undefined ? { type: field.type.name } : { type: field.type.name, ...failureMeta };
         errors = appendErrors(
           errors,
           name,
-          [errorOf(result.message ?? "is invalid", "cast", meta)],
-          base !== undefined,
+          [errorOf(own(result, "message") ?? "is invalid", "cast", meta)],
+          true,
         );
         valid = false;
         continue;
@@ -2514,9 +2533,9 @@ export function rebuild<C extends AnyChangeset>(
     specOf(changeset),
     changeset.data as object | null,
     changeset.params,
-    parts.changes ?? (changeset.changes as Values),
-    parts.errors ?? changeset.errors,
-    parts.valid ?? changeset.valid,
+    own(parts, "changes") ?? (changeset.changes as Values),
+    own(parts, "errors") ?? changeset.errors,
+    own(parts, "valid") ?? changeset.valid,
     changeset.action,
     nodeOf(changeset),
     changeset.constraints,

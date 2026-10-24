@@ -6,14 +6,36 @@
 //
 // Sizes are bounded by counting work (property reads), not by timing it, so that the
 // tests do not depend on the speed of the machine.
-import { User } from "@egon-orm/test-support";
+import { Post, User } from "@egon-orm/test-support";
 import fc from "fast-check";
 import { afterEach, describe, expect, test } from "vitest";
+import { createAdapter } from "../../src/adapter/adapter.js";
+import type { DriverConnection, DriverCursor, DriverWrapper } from "../../src/adapter/driver.js";
 import { embedValue } from "../../src/changeset/nested/embed.js";
 import { indexOfKey, keyFinder } from "../../src/changeset/nested/relation.js";
+import { POSTGRES_CAPABILITIES } from "../../src/compiler/index.js";
+import type { PoolEvent, RawResult } from "../../src/contracts/adapter.js";
 import type { AnySchema, FieldMeta, Row } from "../../src/contracts/schema.js";
-import { CastError, NotLoadedError, QueryError } from "../../src/errors.js";
-import { cast, change, EmbeddedSchema, hasMany, hasOne, meta, Schema, t } from "../../src/index.js";
+import { CastError, DatabaseError, NotLoadedError, QueryError } from "../../src/errors.js";
+import {
+  cast,
+  change,
+  count,
+  createRepo,
+  cte,
+  defineType,
+  EmbeddedSchema,
+  from,
+  hasMany,
+  hasOne,
+  meta,
+  Schema,
+  t,
+  timestamps,
+} from "../../src/index.js";
+import { defineMigration } from "../../src/migration/define.js";
+import { createMigrator } from "../../src/migration/migrator.js";
+import { fakeDatabase, sqlOf } from "../../src/migration/test-helpers.js";
 
 /** A row as the database would return it, with `assocs` loaded. */
 function loaded<S extends AnySchema>(
@@ -198,6 +220,324 @@ describe("prototype pollution", () => {
       plant("lamp", null);
       expect(() => change(loaded(Desk, { id: 1 })).putAssoc("lamp", null)).toThrow(NotLoadedError);
     });
+  });
+});
+
+describe("an option planted on Object.prototype is no option", () => {
+  const owner = () =>
+    loaded(Owner, { id: 7, title: null }, { leaves: [loaded(Leaf, { id: 1, ownerId: 7, name: "one" })] });
+
+  test("validateRequired keeps its own message and trims", () => {
+    plant("message", "planted");
+    plant("trim", false);
+    const cs = cast(User, { email: " " }, ["email"]).validateRequired(["email"], {});
+    expect(cs.errors.email?.map((error) => error.message)).toEqual(["can't be blank"]);
+  });
+
+  test("cast keeps its empty values and does not force changes", () => {
+    plant("emptyValues", ["a@b.c"]);
+    plant("forceChanges", true);
+    expect(cast(User, { email: "a@b.c" }, ["email"], {}).changes).toEqual({ email: "a@b.c" });
+    const stored = loaded(Owner, { id: 7, title: "same" });
+    expect(cast(stored, { title: "same" }, ["title"], {}).changes).toEqual({});
+  });
+
+  test("castAssoc without options is not required and uses the target's changeset", () => {
+    plant("required", true);
+    plant("with", () => {
+      throw new Error("the planted with was called");
+    });
+    const cs = cast(owner(), {}, []).castAssoc("leaves");
+    expect(cs.valid).toBe(true);
+    const again = cast(owner(), { leaves: [{ id: 1, name: "two" }] }, []).castAssoc("leaves");
+    expect(again.valid).toBe(true);
+  });
+
+  test("validateConfirmation does not require the confirmation", () => {
+    plant("required", true);
+    const cs = cast(User, { email: "a@b.c" }, ["email"]).validateConfirmation("email", {});
+    expect(cs.errors).toEqual({});
+  });
+
+  test("validateLength and validateNumber keep their own messages and limits", () => {
+    plant("message", "planted");
+    plant("max", 1);
+    const short = cast(User, { name: "a" }, ["name"]).validateLength("name", { min: 2 });
+    expect(short.errors.name?.map((error) => error.message)).toEqual([
+      "should be at least {count} character(s)",
+    ]);
+    expect(cast(User, { name: "abc" }, ["name"]).validateLength("name", { min: 2 }).valid).toBe(true);
+    const young = cast(User, { age: 3 }, ["age"]).validateNumber("age", { greaterThan: 12 });
+    expect(young.errors.age?.map((error) => error.message)).toEqual(["must be greater than {number}"]);
+  });
+
+  test("a constraint keeps its default name, match and error key", () => {
+    plant("name", "planted_key");
+    plant("match", "prefix");
+    plant("errorKey", "planted");
+    const [constraint] = cast(User, {}, []).uniqueConstraint("email", {}).constraints;
+    expect(constraint).toMatchObject({ name: "users_email_key", match: "exact", field: "email" });
+  });
+
+  test("validate() keeps every issue and narrows nothing", () => {
+    plant("scope", "changed");
+    plant("only", ["name"]);
+    const cs = cast(User, { name: "x" }, ["name"]).validate(() => [{ path: "email", message: "is odd" }], {});
+    expect(cs.errors.email?.map((error) => error.message)).toEqual(["is odd"]);
+  });
+
+  test("a failed cast reports its own message and meta", () => {
+    plant("message", "planted");
+    plant("meta", { planted: true });
+    const cs = cast(User, { age: "x" }, ["age"]);
+    expect(cs.errors.age).toEqual([{ message: "is invalid", validation: "cast", meta: { type: "integer" } }]);
+  });
+
+  test("a validation that leaves the changes alone keeps them", () => {
+    plant("changes", {});
+    plant("valid", true);
+    const cs = cast(User, { email: "a@b.c" }, ["email"]).validate(() => [{ path: "age", message: "is odd" }]);
+    expect(cs.changes).toEqual({ email: "a@b.c" });
+    expect(cs.valid).toBe(false);
+  });
+
+  test("{ types } without data is refused", () => {
+    plant("data", { name: "planted" });
+    const target = { types: { name: t.string() } } as unknown as typeof User;
+    expect(() => cast(target, { name: "x" }, ["name"])).toThrow(QueryError);
+  });
+});
+
+describe("a key planted on Object.prototype is no option of a query, a schema or a type", () => {
+  test("lock(): skipLocked", () => {
+    plant("skipLocked", true);
+    expect(from(Post, "p").lock("update", {}).ast.lock?.clause).toBe("FOR UPDATE");
+  });
+
+  test("withCte(): recursive", () => {
+    plant("recursive", true);
+    const recent = from(Post, "p").select(({ p }) => ({ id: p.id }));
+    const q = from(cte("recent", recent), "r").withCte("recent", recent, {});
+    expect(q.toString()).not.toContain("recursive");
+  });
+
+  test("windows() and over(): frame and partitionBy", () => {
+    plant("frame", "not a fragment");
+    plant("partitionBy", ["not an expression"]);
+    expect(() => from(Post, "p").windows({ w: () => ({}) })).not.toThrow();
+    expect(() => count().over({})).not.toThrow();
+  });
+
+  test("Schema(): naming", () => {
+    plant("naming", "camelCase");
+    class Thing extends Schema("things", { id: t.integer().primaryKey(), firstName: t.string() }, {}) {}
+    expect(meta(Thing).fieldsByName.get("firstName")?.column).toBe("first_name");
+  });
+
+  test("an association: onReplace", () => {
+    plant("onReplace", "delete");
+    class Leaf extends Schema("leaves", { id: t.integer().primaryKey(), ownerId: t.integer() }) {}
+    class Owner extends Schema("owners", { id: t.integer().primaryKey() }) {
+      static leaves = hasMany(() => Leaf, { foreignKey: "ownerId" });
+    }
+    expect(meta(Owner).assocs().get("leaves")?.onReplace).toBe("error");
+  });
+
+  test("t.bigint(): mode", () => {
+    plant("mode", "number");
+    class Big extends Schema("bigs", { id: t.integer().primaryKey(), n: t.bigint({}) }) {}
+    expect(cast(Big, { n: "5" }, ["n"]).changes).toEqual({ n: 5n });
+  });
+
+  test("t.decimal(): scale", () => {
+    plant("scale", 5);
+    expect(() => t.decimal({ precision: 3 })).not.toThrow();
+  });
+
+  test("t.date(): as", () => {
+    plant("as", "date");
+    class Day extends Schema("days", { id: t.integer().primaryKey(), on: t.date({}) }) {}
+    expect(cast(Day, { on: "2026-10-24" }, ["on"]).changes).toEqual({ on: "2026-10-24" });
+  });
+
+  test("timestamps(): createdAt", () => {
+    plant("createdAt", "made");
+    expect(Object.keys(timestamps())).toEqual(["createdAt", "updatedAt"]);
+  });
+
+  test("defineType(): equal", () => {
+    plant("equal", () => true);
+    const code = defineType<string>({
+      name: "code",
+      db: { kind: "text" },
+      cast: (value) => (typeof value === "string" ? { success: true, data: value } : { success: false }),
+    });
+    expect(code.equal("a", "b")).toBe(false);
+  });
+
+  test("a failed cast of an array element: message", () => {
+    plant("message", "planted");
+    class Tagged extends Schema("tagged", { id: t.integer().primaryKey(), tags: t.array(t.integer()) }) {}
+    const cs = cast(Tagged, { tags: ["x"] }, ["tags"]);
+    expect(cs.errors.tags?.[0]?.message).toBe("is invalid");
+  });
+});
+
+describe("a key planted on Object.prototype is no migration option", () => {
+  test("createTable without options does not take a planted ifNotExists", () => {
+    plant("ifNotExists", true);
+    const [sql] = sqlOf((m) => m.createTable("posts", (t) => t.id()));
+    expect(sql).not.toContain("if not exists");
+  });
+
+  test("a column without options takes no planted precision, and no planted default precision", () => {
+    plant("precision", 3);
+    plant("integer", [5]);
+    const [sql] = sqlOf((m) =>
+      m.createTable("posts", (t) => {
+        t.id();
+        t.timestamp("published_at");
+        t.integer("views");
+      }),
+    );
+    expect(sql).toContain('"published_at" timestamp,');
+    expect(sql).toContain('"views" integer)');
+  });
+
+  test("defineMigration does not take a planted transaction: false", () => {
+    plant("transaction", false);
+    const migration = defineMigration({ up() {}, down() {} });
+    expect(migration.transaction).toBe(true);
+  });
+
+  test("createMigrator does not take a planted tracking table", async () => {
+    plant("table", "planted_migrations");
+    const fake = fakeDatabase();
+    const migrator = createMigrator({ adapter: fake.adapter, migrations: [] });
+    await migrator.up();
+    const sql = fake.statements.map((statement) => statement.sql).join("\n");
+    expect(sql).toContain('"schema_migrations"');
+    expect(sql).not.toContain("planted_migrations");
+  });
+});
+
+interface Sent {
+  readonly sql: string;
+  readonly statementName: string | undefined;
+}
+
+/** A driver without a database: records each statement and answers with `rows`. */
+class RecordingDriver implements DriverWrapper {
+  readonly sent: Sent[] = [];
+  rows: readonly Record<string, unknown>[] = [];
+  init(): void {}
+  async acquire(): Promise<DriverConnection> {
+    const driver = this;
+    return {
+      async query(sql, _params, statementName): Promise<RawResult> {
+        driver.sent.push({ sql, statementName });
+        return { rows: driver.rows, rowCount: driver.rows.length, insertId: undefined };
+      },
+      async cursor(): Promise<DriverCursor> {
+        throw new Error("no cursors here");
+      },
+      async cancel(): Promise<void> {},
+      inTransaction: () => false,
+    };
+  }
+  async release(): Promise<void> {}
+  async destroy(): Promise<void> {}
+  stats(): PoolEvent {
+    return { size: 1, idle: 1, waiting: 0 };
+  }
+  saturated(): boolean {
+    return false;
+  }
+}
+
+function setup() {
+  const driver = new RecordingDriver();
+  const adapter = createAdapter({
+    dialect: "postgres",
+    capabilities: POSTGRES_CAPABILITIES,
+    quoteIdentifier: (name) => `"${name.replaceAll('"', '""')}"`,
+    driver: () => driver,
+    driverCodecs: {},
+    normalizeError: (error) => error,
+  });
+  return { repo: createRepo({ adapter }), adapter, driver };
+}
+
+describe("a key planted on Object.prototype is no option of the repo", () => {
+  test("insertAll without options does not take a planted onConflict", async () => {
+    const { repo, driver } = setup();
+    plant("onConflict", "nothing");
+    await repo.insertAll(User, [{ email: "a@b.c" }]);
+    expect(driver.sent.map((each) => each.sql).join("\n")).not.toContain("on conflict");
+  });
+
+  test("explain does not take a planted analyze", async () => {
+    const { repo, driver } = setup();
+    driver.rows = [{ "QUERY PLAN": "Seq Scan on users" }];
+    plant("analyze", true);
+    await repo.explain(from(User, "u")).catch(() => undefined);
+    const sql = driver.sent.at(-1)?.sql ?? "";
+    expect(sql.startsWith("explain")).toBe(true);
+    expect(sql.toLowerCase()).not.toContain("analyze");
+  });
+
+  test("a read given {} does not take a planted schema", async () => {
+    const { repo, driver } = setup();
+    plant("schema", "planted_schema");
+    await repo.all(from(User, "u"), {});
+    expect(driver.sent.at(-1)?.sql).not.toContain("planted_schema");
+  });
+
+  test("a statement is not prepared under a planted statementName", async () => {
+    const { repo, driver } = setup();
+    plant("statementName", "planted");
+    await repo.all(from(User, "u"));
+    expect(driver.sent.at(-1)?.statementName).toBeUndefined();
+  });
+
+  test("a transaction given {} does not retry under a planted retries", async () => {
+    const { repo } = setup();
+    plant("retries", 3);
+    let runs = 0;
+    await repo
+      .transaction(async () => {
+        runs++;
+        throw new DatabaseError("database.rejected", "conflict", { code: "serializationFailure" });
+      }, {})
+      .catch(() => undefined);
+    expect(runs).toBe(1);
+  });
+
+  test("a database error is not retryable under a planted retryable", () => {
+    plant("retryable", true);
+    expect(new DatabaseError("database.rejected", "down", { code: "connection" }).retryable).toBe(false);
+  });
+});
+
+describe("a field listed twice in a write's options is written once", () => {
+  test("onConflict's update", async () => {
+    const { repo, driver } = setup();
+    driver.rows = [{ c0: 1 }];
+    await repo
+      .insert(cast(User, { email: "a@b.c", name: "Ada" }, ["email", "name"]), {
+        onConflict: { target: ["email"], update: ["name", "name"] },
+      })
+      .catch(() => undefined);
+    const sql = driver.sent.find((each) => each.sql.startsWith("insert"))?.sql ?? "";
+    expect(sql).toContain("do update set");
+    expect(sql.match(/"name" = "excluded"\."name"/g)).toHaveLength(1);
+  });
+
+  test("insertAll's returning", async () => {
+    const { repo, driver } = setup();
+    await repo.insertAll(User, [{ email: "a@b.c" }], { returning: ["id", "id"] });
+    const sql = driver.sent.find((each) => each.sql.startsWith("insert"))?.sql ?? "";
+    expect(sql.slice(sql.indexOf("returning")).match(/"id"/g)).toHaveLength(1);
   });
 });
 

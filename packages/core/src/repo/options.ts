@@ -12,6 +12,7 @@
 import type { DatabaseAdapter } from "../adapter/adapter.js";
 import type { QueryEvent } from "../contracts/adapter.js";
 import type { NamedParamNode, QueryAst } from "../contracts/query.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { collectParams } from "../query/ast.js";
 
@@ -275,7 +276,7 @@ export function repoSettings(options: unknown, writeLine: (line: string) => void
       );
     }
   }
-  const adapter = given.adapter as Partial<DatabaseAdapter> | undefined;
+  const adapter = own(given, "adapter") as Partial<DatabaseAdapter> | undefined;
   if (
     typeof adapter !== "object" ||
     adapter === null ||
@@ -289,7 +290,7 @@ export function repoSettings(options: unknown, writeLine: (line: string) => void
       `${where}: adapter must be a database adapter, such as postgres({ connectionString }) from @egon-orm/postgres.`,
     );
   }
-  const log = given.log;
+  const log = own(given, "log");
   let logger: ((event: RepoQueryEvent) => void) | undefined;
   let logParams = false;
   if (log === undefined || log === false) {
@@ -303,7 +304,7 @@ export function repoSettings(options: unknown, writeLine: (line: string) => void
     log !== null &&
     isPlainObject(log) &&
     Object.keys(log).length === 1 &&
-    (log as { params?: unknown }).params === true
+    own(log as { params?: unknown }, "params") === true
   ) {
     logger = lineLogger(writeLine, true);
     logParams = true;
@@ -314,16 +315,16 @@ export function repoSettings(options: unknown, writeLine: (line: string) => void
   }
   return {
     adapter: adapter as DatabaseAdapter,
-    schema: checkSchemaName(where, given.schema),
+    schema: checkSchemaName(where, own(given, "schema")),
     logger,
     logParams,
     warnOnRootUseInTransaction: checkBoolean(
       where,
       "warnOnRootUseInTransaction",
-      given.warnOnRootUseInTransaction,
+      own(given, "warnOnRootUseInTransaction"),
       false,
     ),
-    codegen: checkBoolean(where, "codegen", given.codegen, true),
+    codegen: checkBoolean(where, "codegen", own(given, "codegen"), true),
   };
 }
 
@@ -401,8 +402,8 @@ export function checkReadOptions<O extends ReadOptions>(
       );
     }
   }
-  checkSchemaName(`repo.${method}()`, given.schema);
-  const context = given.context;
+  checkSchemaName(`repo.${method}()`, own(given, "schema"));
+  const context = own(given, "context");
   if (context !== undefined && (typeof context !== "object" || context === null || !isPlainObject(context))) {
     throw new TypeError(
       `repo.${method}(): the context option must be a plain object, but it is ${describe(context)}.`,

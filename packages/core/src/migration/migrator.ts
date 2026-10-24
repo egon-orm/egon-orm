@@ -10,6 +10,7 @@ import { redactParams } from "../adapter/telemetry.js";
 import { quoteIdentifier, type SqlDialect } from "../compiler/dialect.js";
 import type { Adapter, Connection, ParamSlot } from "../contracts/adapter.js";
 import { DatabaseError, isEgonError, MigrationError, shortMessageOf } from "../errors.js";
+import { frozenOptions, own } from "../internal/own.js";
 
 /** The text of an error a migration failed with: an Egon error's short sentence (its identifier is on `cause`). */
 function causeText(error: unknown): string {
@@ -214,6 +215,8 @@ const CLAIM = -1;
 const MIGRATION_SAVEPOINT = "egon_migration";
 
 const DEFAULT_TABLE = "schema_migrations";
+/** The options of `up()` and `down()` without any: no prototype, so nothing is inherited. */
+const NO_OPTIONS = /* @__PURE__ */ frozenOptions({});
 const DEFAULT_TIMESTAMP = "created_at";
 const OPTION_KEYS = [
   "adapter",
@@ -280,7 +283,13 @@ export function createMigrator(options: MigratorOptions): Migrator {
     throw new TypeError("createMigrator() takes an options object: createMigrator({ adapter, directory }).");
   }
   checkKeys("createMigrator()", options, OPTION_KEYS);
-  const adapter = options.adapter;
+  // Options are read as own properties only: a key planted on Object.prototype is no option.
+  const adapter = own(options, "adapter");
+  const givenDirectory = own(options, "directory");
+  const migrations = own(options, "migrations");
+  const log = own(options, "log");
+  const table = own(options, "table");
+  const schema = own(options, "schema");
   if (
     typeof adapter !== "object" ||
     adapter === null ||
@@ -289,10 +298,10 @@ export function createMigrator(options: MigratorOptions): Migrator {
   ) {
     throw new TypeError("createMigrator(): adapter must be an adapter, such as postgres({ … }).");
   }
-  if ((options.directory === undefined) === (options.migrations === undefined)) {
+  if ((givenDirectory === undefined) === (migrations === undefined)) {
     throw new TypeError("createMigrator(): give exactly one of directory and migrations.");
   }
-  if (options.log !== undefined && typeof options.log !== "function") {
+  if (log !== undefined && typeof log !== "function") {
     throw new TypeError("createMigrator(): log must be a function.");
   }
   const syntax = sqlDialectOf(adapter.dialect);
@@ -303,25 +312,24 @@ export function createMigrator(options: MigratorOptions): Migrator {
     );
   }
   const directory =
-    options.directory === undefined ? undefined : checkName("createMigrator(): directory", options.directory);
-  const list = options.migrations === undefined ? undefined : migrationList(options.migrations);
+    givenDirectory === undefined ? undefined : checkName("createMigrator(): directory", givenDirectory);
+  const list = migrations === undefined ? undefined : migrationList(migrations);
   const settings: Settings = {
     adapter,
     syntax,
     dialect: migrationDialectOf(adapter.dialect),
     sources: list === undefined ? () => loadMigrations(directory as string) : () => Promise.resolve(list),
     table: {
-      name: checkName("createMigrator(): table", options.table ?? DEFAULT_TABLE),
-      schema:
-        options.schema === undefined ? undefined : checkName("createMigrator(): schema", options.schema),
+      name: checkName("createMigrator(): table", table ?? DEFAULT_TABLE),
+      schema: schema === undefined ? undefined : checkName("createMigrator(): schema", schema),
     },
     timestampColumn: checkName(
       "createMigrator(): timestampColumn",
-      options.timestampColumn ?? DEFAULT_TIMESTAMP,
+      own(options, "timestampColumn") ?? DEFAULT_TIMESTAMP,
     ),
-    lockTimeoutMs: checkMs("createMigrator(): lockTimeoutMs", options.lockTimeoutMs),
-    timeoutMs: checkMs("createMigrator(): timeoutMs", options.timeoutMs),
-    log: options.log,
+    lockTimeoutMs: checkMs("createMigrator(): lockTimeoutMs", own(options, "lockTimeoutMs")),
+    timeoutMs: checkMs("createMigrator(): timeoutMs", own(options, "timeoutMs")),
+    log,
   };
   return new DatabaseMigrator(settings);
 }
@@ -366,14 +374,16 @@ class DatabaseMigrator implements Migrator {
 
   up(options?: UpOptions): Promise<MigrationRun[]> {
     const where = "migrator.up()";
-    const checked = options ?? {};
+    const checked: UpOptions = options ?? NO_OPTIONS;
     checkKeys(where, checked, ["to", "step", "dryRun"]);
-    if (checked.to !== undefined && checked.step !== undefined) {
+    const givenTo = own(checked, "to");
+    const givenStep = own(checked, "step");
+    if (givenTo !== undefined && givenStep !== undefined) {
       throw new TypeError(`${where}: give at most one of to and step.`);
     }
-    const to = checked.to === undefined ? undefined : checkVersion(where, checked.to);
-    const step = checked.step === undefined ? undefined : checkStep(where, checked.step);
-    return this.#run(dryRunOf(where, checked.dryRun), (known, applied) => {
+    const to = givenTo === undefined ? undefined : checkVersion(where, givenTo);
+    const step = givenStep === undefined ? undefined : checkStep(where, givenStep);
+    return this.#run(dryRunOf(where, own(checked, "dryRun")), (known, applied) => {
       const done = new Set(applied);
       let pending = known.filter((source) => !done.has(source.version));
       if (to !== undefined) pending = pending.filter((source) => source.version <= to);
@@ -394,20 +404,23 @@ class DatabaseMigrator implements Migrator {
 
   down(options?: DownOptions): Promise<MigrationRun[]> {
     const where = "migrator.down()";
-    const checked = options ?? {};
+    const checked: DownOptions = options ?? NO_OPTIONS;
     checkKeys(where, checked, ["to", "step", "all", "dryRun"]);
-    const given = [checked.to, checked.step, checked.all].filter((value) => value !== undefined).length;
+    const givenTo = own(checked, "to");
+    const givenStep = own(checked, "step");
+    const all = own(checked, "all");
+    const given = [givenTo, givenStep, all].filter((value) => value !== undefined).length;
     if (given > 1) throw new TypeError(`${where}: give at most one of to, step and all.`);
-    if (checked.all !== undefined && checked.all !== true) {
+    if (all !== undefined && all !== true) {
       throw new TypeError(`${where}: all must be true when given.`);
     }
-    const to = checked.to === undefined ? undefined : checkVersion(where, checked.to);
-    const step = checked.step === undefined ? 1 : checkStep(where, checked.step);
-    return this.#run(dryRunOf(where, checked.dryRun), (known, applied) => {
+    const to = givenTo === undefined ? undefined : checkVersion(where, givenTo);
+    const step = givenStep === undefined ? 1 : checkStep(where, givenStep);
+    return this.#run(dryRunOf(where, own(checked, "dryRun")), (known, applied) => {
       const byVersion = new Map(known.map((source) => [source.version, source]));
       const newestFirst = [...applied].reverse();
       const chosen =
-        checked.all === true
+        all === true
           ? newestFirst
           : to !== undefined
             ? newestFirst.filter((version) => version >= to)

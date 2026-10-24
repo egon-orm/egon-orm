@@ -265,6 +265,24 @@ describe("validateUniqueAsync", () => {
     expect(result.errors.email?.[0]?.message).toBe("has already been taken");
     expect(seen).toEqual([["email"], repo, { message: "taken" }]);
   });
+
+  test("a field listed twice is checked once", async () => {
+    const seen: unknown[] = [];
+    provideValidateUniqueAsync(async (cs, fields) => {
+      seen.push(fields);
+      return cs;
+    });
+    await change(User, { email: "a@b.c", name: "A" }).validateUniqueAsync(["email", "name", "email"], {});
+    expect(seen).toEqual([["email", "name"]]);
+  });
+});
+
+describe("uniqueConstraint: a field listed twice", () => {
+  test("is one column of the default name", () => {
+    const [constraint] = change(User).uniqueConstraint(["email", "name", "email"]).constraints;
+    expect(constraint?.name).toBe("users_email_name_key");
+    expect(change(User).uniqueConstraint(["email", "email"]).constraints[0]?.name).toBe("users_email_key");
+  });
 });
 
 describe("repo", () => {

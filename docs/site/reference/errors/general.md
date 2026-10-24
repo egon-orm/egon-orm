@@ -18,13 +18,13 @@ Fix the input, or call the variant without "OrThrow" to get the changeset back a
 
 ## `multipleResults` {#multipleresults}
 
-> Expected at most one result but got &#123;details.count&#125;&#123;inQuery(details.query)&#125;.
+> Expected at most one result but got &#123;details.count&#125;&#123;inQuery(query)&#125;.
 
 Narrow the query until it matches a single row, add limit(1), or use all().
 
 ## `noResults` {#noresults}
 
-> Expected at least one result but got none&#123;inQuery(details.query)&#125;.
+> Expected at least one result but got none&#123;inQuery(query)&#125;.
 
 Use the variant without "OrThrow" (it returns null) if a missing row is not an error.
 

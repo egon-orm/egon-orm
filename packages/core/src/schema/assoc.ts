@@ -21,6 +21,7 @@ import type {
   SchemaMeta,
 } from "../contracts/schema.js";
 import { type ErrorDetails, type ErrorParams, type IdsOf, SchemaDefinitionError } from "../errors.js";
+import { frozenOptions, own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { definedOnPrototype, describe, isSchema } from "./guards.js";
 
@@ -407,8 +408,11 @@ function declarations(model: AnySchema): [string, Declaration][] {
   return levels.reverse().flat();
 }
 
+/** The options of an association declared without any: no prototype, so nothing is inherited. */
+const NO_OPTIONS: Readonly<Record<string, unknown>> = /* @__PURE__ */ frozenOptions({});
+
 function optionsOf(context: Omit<Context, "options">, declaration: Declaration): Context {
-  const raw = declaration[ASSOC] ?? {};
+  const raw = declaration[ASSOC] ?? NO_OPTIONS;
   const full = context as Context;
   if (typeof raw !== "object" || !isPlainObject(raw)) {
     fail(
@@ -574,7 +578,7 @@ function checkPairs(
 }
 
 function onReplaceOf(context: Context): OnReplace {
-  const value = context.options.onReplace ?? "error";
+  const value = own(context.options, "onReplace") ?? "error";
   const allowed = ON_REPLACE[context.kind];
   if (!allowed.includes(value as OnReplace)) {
     fail(
@@ -592,7 +596,7 @@ function filterOf(
   option: string,
   rename: (key: string) => string,
 ): Readonly<Record<string, unknown>> | undefined {
-  const value = context.options[option];
+  const value = own(context.options, option);
   if (value === undefined) return undefined;
   if (typeof value !== "object" || value === null || !isPlainObject(value)) {
     fail(context, "schema.assocWhereOption", `${option} must be an object from name to value.`);
@@ -616,7 +620,7 @@ function whereOf(context: Context, targetMeta: SchemaMeta): Readonly<Record<stri
 }
 
 function orderOf(context: Context, targetMeta: SchemaMeta): readonly AssocOrderMeta[] {
-  const value = context.options.orderBy;
+  const value = own(context.options, "orderBy");
   if (value === undefined) return NO_ORDER;
   const problem = 'orderBy must be an array of field names or { field: "asc" | "desc" } objects.';
   if (!Array.isArray(value)) fail(context, "schema.assocOrderBy", problem);
@@ -675,11 +679,12 @@ function assocMeta(context: Context, parts: Parts): ResolvedAssoc {
 function resolveBelongsTo(context: Context, declaration: Declaration): ResolvedAssoc {
   const [, targetMeta] = targetOf(context, declaration.target);
   const { options, ownerMeta, name } = context;
-  const foreignKey = keyNames(context, "foreignKey", options.foreignKey ?? `${name}Id`);
+  const foreignKey = keyNames(context, "foreignKey", own(options, "foreignKey") ?? `${name}Id`);
+  const given = own(options, "references");
   const references =
-    options.references === undefined
+    given === undefined
       ? primaryKeyOf(context, targetMeta, "references")
-      : keyNames(context, "references", options.references);
+      : keyNames(context, "references", given);
   checkPairs(context, ownerMeta, foreignKey, targetMeta, references, { id: "schema.belongsToKeyMissing" });
   return assocMeta(context, {
     target: declaration.target as () => AnySchema,
@@ -692,7 +697,8 @@ function resolveBelongsTo(context: Context, declaration: Declaration): ResolvedA
 function resolveHas(context: Context, declaration: Declaration): ResolvedAssoc {
   const [, targetMeta] = targetOf(context, declaration.target);
   const { options, ownerMeta, kind } = context;
-  if (options.foreignKey === undefined) {
+  const foreignKeyOption = own(options, "foreignKey");
+  if (foreignKeyOption === undefined) {
     fail(
       context,
       "schema.foreignKeyRequired",
@@ -700,11 +706,12 @@ function resolveHas(context: Context, declaration: Declaration): ResolvedAssoc {
       { params: { kind, target: targetMeta.name } },
     );
   }
-  const foreignKey = keyNames(context, "foreignKey", options.foreignKey);
+  const foreignKey = keyNames(context, "foreignKey", foreignKeyOption);
+  const given = own(options, "references");
   const references =
-    options.references === undefined
+    given === undefined
       ? primaryKeyOf(context, ownerMeta, "references")
-      : keyNames(context, "references", options.references);
+      : keyNames(context, "references", given);
   checkPairs(context, targetMeta, foreignKey, ownerMeta, references, {
     id: "schema.hasKeyMissing",
     params: { target: targetMeta.name },
@@ -733,17 +740,12 @@ function singleKey(context: Context, meta: SchemaMeta): FieldMeta {
 }
 
 function joinKeyNames(context: Context, unit: string): { owner: string; target: string } | undefined {
-  const value = context.options.joinKeys;
+  const value = own(context.options, "joinKeys");
   if (value === undefined) return undefined;
   const keys = value as { readonly owner?: unknown; readonly target?: unknown } | null;
-  if (
-    typeof keys !== "object" ||
-    keys === null ||
-    typeof keys.owner !== "string" ||
-    typeof keys.target !== "string" ||
-    keys.owner === "" ||
-    keys.target === ""
-  ) {
+  const owner = typeof keys === "object" ? own(keys, "owner") : undefined;
+  const target = typeof keys === "object" ? own(keys, "target") : undefined;
+  if (typeof owner !== "string" || typeof target !== "string" || owner === "" || target === "") {
     fail(
       context,
       "schema.joinKeysOption",
@@ -751,12 +753,12 @@ function joinKeyNames(context: Context, unit: string): { owner: string; target: 
       { params: { unit } },
     );
   }
-  if (keys.owner === keys.target) {
-    fail(context, "schema.joinKeysSame", `joinKeys.owner and joinKeys.target are both "${keys.owner}".`, {
+  if (owner === target) {
+    fail(context, "schema.joinKeysSame", `joinKeys.owner and joinKeys.target are both "${owner}".`, {
       params: { unit },
     });
   }
-  return { owner: keys.owner, target: keys.target };
+  return { owner, target };
 }
 
 /** The join schema's `belongsTo` that points at `side`, when there is exactly one. */
@@ -782,7 +784,7 @@ function resolveManyToMany(context: Context, declaration: Declaration): Resolved
   const { options, owner, ownerMeta } = context;
   const ownerKey = singleKey(context, ownerMeta);
   const targetKey = singleKey(context, targetMeta);
-  const through = options.joinThrough;
+  const through = own(options, "joinThrough");
 
   let joinThrough: JoinThroughMeta;
   let ownerColumn: string;
@@ -865,7 +867,7 @@ function resolveManyToMany(context: Context, declaration: Declaration): Resolved
     );
   }
 
-  const unique = options.unique ?? false;
+  const unique = own(options, "unique") ?? false;
   if (typeof unique !== "boolean") fail(context, "schema.uniqueOption", "unique must be true or false.");
   return assocMeta(context, {
     target: declaration.target as () => AnySchema,
@@ -891,7 +893,7 @@ function resolveThrough(context: Context, declaration: Declaration): ResolvedAss
   if (others.length > 0) {
     fail(context, "schema.throughCombined", `through cannot be combined with ${others.join(", ")}.`);
   }
-  const path = options.through;
+  const path = own(options, "through");
   if (
     !Array.isArray(path) ||
     path.length < 2 ||
@@ -1014,7 +1016,7 @@ export function resolveAssocs(
   // Three rounds, so that what a later round looks up in another schema is already
   // there: plain keys first, then join tables (which may read the join schema's
   // belongsTo), then the chains that follow all of them.
-  const isThrough = (context: Context): boolean => context.options.through !== undefined;
+  const isThrough = (context: Context): boolean => own(context.options, "through") !== undefined;
   for (const [context, declaration] of pending) {
     if (isThrough(context) || context.kind === "manyToMany") continue;
     built.set(

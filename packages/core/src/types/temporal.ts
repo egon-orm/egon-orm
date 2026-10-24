@@ -9,6 +9,7 @@
  */
 import type { CastResult, FieldType } from "../contracts/type.js";
 import { CastError, SchemaDefinitionError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { defineType } from "./define.js";
 import { INVALID, integerType } from "./scalars.js";
 
@@ -234,7 +235,7 @@ export interface DateOptions {
 export function dateType(options?: { readonly as?: "string" }): FieldType<string, string>;
 export function dateType(options: { readonly as: "date" }): FieldType<Date, string>;
 export function dateType(options?: DateOptions): FieldType<string, string> | FieldType<Date, string> {
-  const as = options?.as ?? "string";
+  const as = own(options, "as") ?? "string";
   if (as === "string") return DATE;
   if (as === "date") return DATE_AS_DATE;
   throw new SchemaDefinitionError(
@@ -388,7 +389,7 @@ function pickPrecision(
   types: Readonly<Record<TimestampPrecision, FieldType<Date, Date>>>,
   options: TimestampOptions | undefined,
 ): FieldType<Date, Date> {
-  const precision = options?.precision ?? "ms";
+  const precision = own(options, "precision") ?? "ms";
   if (precision === "s" || precision === "ms" || precision === "us") return types[precision];
   throw new SchemaDefinitionError(
     "schema.precisionOption",

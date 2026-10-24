@@ -9,6 +9,7 @@ import { MYSQL_CAPABILITIES, quoteIdentifier } from "./dialect.js";
 import { MysqlDriver } from "./driver.js";
 import { normalizeMysqlError } from "./errors.js";
 import { type MysqlOptions, resolveOptions } from "./options.js";
+import { own } from "./own.js";
 import { MYSQL_DRIVER_CODECS } from "./values.js";
 
 export type { MysqlOptions, MysqlPoolOptions } from "./options.js";
@@ -47,7 +48,7 @@ export const VERSION: string = "0.0.0";
  */
 export function mysql(options?: MysqlOptions): DatabaseAdapter {
   const settings = resolveOptions(options);
-  const planCacheSize = options?.planCacheSize;
+  const planCacheSize = own(options, "planCacheSize");
   return createAdapter({
     dialect: "mysql",
     capabilities: MYSQL_CAPABILITIES,

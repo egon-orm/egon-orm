@@ -51,6 +51,7 @@ import type {
 import type { AnyFieldType } from "../contracts/type.js";
 import { QueryError, rewrap, shortMessageOf } from "../errors.js";
 import { HASH_SEED, hashInt, hashString } from "../internal/hash.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { isSchema } from "../schema/guards.js";
 import { meta } from "../schema/schema.js";
@@ -1171,14 +1172,16 @@ function lockClause(mode: unknown, options: unknown): string {
   if (typeof options !== "object" || options === null || !isPlainObject(options)) {
     throw new QueryError("query.lockOptions", "lock() takes its options as an object.");
   }
-  const { skipLocked, noWait, ...rest } = options as LockOptions & Record<string, unknown>;
-  const unknownKeys = Object.keys(rest);
+  const given = options as LockOptions;
+  const unknownKeys = Object.keys(given).filter((key) => key !== "skipLocked" && key !== "noWait");
   if (unknownKeys.length > 0) {
     throw new QueryError(
       "query.lockUnknownOption",
       `lock() has no option ${unknownKeys.map((k) => `"${k}"`).join(", ")}.`,
     );
   }
+  const skipLocked = own(given, "skipLocked");
+  const noWait = own(given, "noWait");
   if (skipLocked === true && noWait === true) {
     throw new QueryError("query.lockSkipAndNoWait", "lock() takes skipLocked or noWait, not both.");
   }

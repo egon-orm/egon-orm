@@ -48,6 +48,7 @@ import type {
 } from "../contracts/adapter.js";
 import { failure, type Result, success } from "../contracts/result.js";
 import { DatabaseError, isEgonError, QueryError, RollbackError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import type { ReadOptions } from "./options.js";
 import { Call, type QueryHub, ReadCore } from "./read.js";
@@ -130,7 +131,10 @@ function settingsOf(method: string, options: unknown): Settings {
       );
     }
   }
-  const { isolation, readOnly, retries, timeoutMs } = given;
+  const isolation = own(given, "isolation");
+  const readOnly = own(given, "readOnly");
+  const retries = own(given, "retries");
+  const timeoutMs = own(given, "timeoutMs");
   if (isolation !== undefined && (typeof isolation !== "string" || !ISOLATION_LEVELS.includes(isolation))) {
     throw new TypeError(
       `repo.${method}(fn, { isolation }): isolation must be "read committed", "repeatable read" or "serializable", but it is ${describe(isolation)}.`,
@@ -320,7 +324,7 @@ class Waiting {
   stop(): void {
     this.done = true;
     if (this.timer !== undefined) clearTimeout(this.timer);
-    if (this.onAbort !== undefined) this.options?.signal?.removeEventListener("abort", this.onAbort);
+    if (this.onAbort !== undefined) own(this.options, "signal")?.removeEventListener("abort", this.onAbort);
   }
 }
 
@@ -360,7 +364,7 @@ export class Session {
     if (this.busy) return this.#wait(level, sql, params, options, undefined) as Promise<RawResult>;
     // Refused here rather than by the adapter: a statement that was never sent must not
     // count as one that failed in the transaction.
-    if (options?.signal?.aborted === true) return Promise.reject(abortedBeforeRun(sql));
+    if (own(options, "signal")?.aborted === true) return Promise.reject(abortedBeforeRun(sql));
     return this.#send(sql, params, options);
   }
 
@@ -371,7 +375,7 @@ export class Session {
    * level, which outside the sandbox would each run alone.
    */
   isolated(sql: string, params: readonly unknown[], options: ExecuteOptions | undefined): Promise<RawResult> {
-    if (options?.signal?.aborted === true) return Promise.reject(abortedBeforeRun(sql));
+    if (own(options, "signal")?.aborted === true) return Promise.reject(abortedBeforeRun(sql));
     const connection = this.connection;
     return this.control(async () => {
       await connection.savepoint(STATEMENT_SAVEPOINT);
@@ -449,7 +453,7 @@ export class Session {
       const entry = new Waiting(level, sql, params, options, work, now(), resolve, reject);
       // `stop()` removes the listener and the timer once the entry runs or gives up, so
       // neither fires for an entry that is done.
-      const signal = options?.signal;
+      const signal = own(options, "signal");
       if (signal !== undefined) {
         entry.onAbort = () => {
           entry.stop();
@@ -463,7 +467,7 @@ export class Session {
         };
         signal.addEventListener("abort", entry.onAbort, { once: true });
       }
-      const timeoutMs = options?.timeoutMs;
+      const timeoutMs = own(options, "timeoutMs");
       if (timeoutMs !== undefined) {
         entry.timer = setTimeout(() => {
           entry.stop();
@@ -503,7 +507,7 @@ export class Session {
         continue;
       }
       let options = entry.options;
-      const timeoutMs = options?.timeoutMs;
+      const timeoutMs = own(options, "timeoutMs");
       if (timeoutMs !== undefined) {
         const left = timeoutMs - (now() - entry.since);
         if (left <= 0) {
@@ -512,7 +516,7 @@ export class Session {
         }
         options = { ...options, timeoutMs: left };
       }
-      if (options?.signal?.aborted === true) {
+      if (own(options, "signal")?.aborted === true) {
         entry.reject(abortedBeforeRun(entry.sql));
         continue;
       }
@@ -677,8 +681,8 @@ export class Level implements Executor {
   ): Promise<RawResult> {
     // Positive: `refusal()` has just checked that the deadline is still ahead.
     const left = Math.max(0, deadline - now());
-    const own = options?.timeoutMs;
-    if (own !== undefined && own <= left) return this.session.execute(this, sql, params, options);
+    const given = own(options, "timeoutMs");
+    if (given !== undefined && given <= left) return this.session.execute(this, sql, params, options);
     try {
       return await this.session.execute(this, sql, params, { ...options, timeoutMs: left });
     } catch (error) {
@@ -716,7 +720,8 @@ export class Level implements Executor {
     let given = options;
     if (this.deadline !== undefined) {
       const left = Math.max(0, this.deadline - now());
-      if (given?.timeoutMs === undefined || given.timeoutMs > left) given = { ...given, timeoutMs: left };
+      const timeoutMs = own(given, "timeoutMs");
+      if (timeoutMs === undefined || timeoutMs > left) given = { ...given, timeoutMs: left };
     }
     try {
       yield* session.connection.stream(sql, params, given);
@@ -1010,9 +1015,9 @@ async function send(
   const session = level.session;
   const hub = session.hub;
   const given = level.owner?.options;
-  const call = hub.listening ? new Call(hub, "transaction", undefined, given?.context) : undefined;
+  const call = hub.listening ? new Call(hub, "transaction", undefined, own(given, "context")) : undefined;
   // A rollback is never stopped: it ends what the signal or the budget stopped.
-  const signal = statement === "rollback" || statement === "rollbackTo" ? undefined : given?.signal;
+  const signal = statement === "rollback" || statement === "rollbackTo" ? undefined : own(given, "signal");
   // One shape whatever is set (the adapter reads an `undefined` option as absent).
   const options =
     timeoutMs === undefined && call === undefined && signal === undefined

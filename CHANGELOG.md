@@ -64,6 +64,12 @@ of the migration builder, and the migration builders' `context` and `added`).
   as field errors instead of exceptions.
 - Nested changesets write a parent with its children (`castAssoc`, `putAssoc`,
   `castEmbed`) in one atomic call.
+- A field name listed twice (in `cast`'s permitted list, `validateRequired`,
+  `uniqueConstraint`, `validateUniqueAsync`, or a repo write's `returning` and
+  `onConflict` lists) counts once: one error, one column.
+- Options objects are read as own properties only, everywhere: a key planted on
+  `Object.prototype` is never taken as an option, and neither are the library's defaults'
+  inherited keys.
 
 ### Queries
 

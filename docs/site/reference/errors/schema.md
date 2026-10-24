@@ -314,7 +314,7 @@ Pass joinKeys, as in &#123; joinThrough: "&#123;through&#125;", joinKeys: &#123;
 
 ## `schema.joinKeysSame` {#schema-joinkeyssame}
 
-> joinKeys.owner and joinKeys.target are both "&#123;keys.owner&#125;".
+> joinKeys.owner and joinKeys.target are both "&#123;owner&#125;".
 
 They are two different &#123;unit&#125;s.
 

@@ -4,6 +4,7 @@
  * @module
  */
 import type { PoolOptions, SslOptions } from "mysql2";
+import { own } from "./own.js";
 
 /**
  * Pool settings for the pool the adapter creates.
@@ -124,7 +125,7 @@ function optionalCount(value: unknown, name: string, min: number, max: number): 
  * `affectedRows` counting the rows changed (an upsert that met an existing row and changed
  * nothing reports 0; for an `UPDATE` the driver wrapper reads the rows matched instead).
  */
-const FIXED: PoolOptions = {
+const FIXED: Readonly<PoolOptions> = /* @__PURE__ */ Object.freeze({
   dateStrings: true,
   supportBigNumbers: true,
   bigNumberStrings: false,
@@ -133,7 +134,12 @@ const FIXED: PoolOptions = {
   charset: "UTF8MB4_0900_AI_CI",
   multipleStatements: false,
   flags: ["-FOUND_ROWS"],
-};
+});
+
+/** No options: no prototype, so a key planted on `Object.prototype` is no option. */
+const NO_OPTIONS: MysqlOptions = /* @__PURE__ */ Object.freeze(
+  /* @__PURE__ */ Object.create(null) as MysqlOptions,
+);
 
 /**
  * Checks the options and builds the pool configuration.
@@ -141,23 +147,23 @@ const FIXED: PoolOptions = {
  * @throws TypeError for an unknown option, or a value of the wrong type or range.
  */
 export function resolveOptions(options: MysqlOptions | undefined): PoolSettings {
-  const given = options ?? {};
+  const given = options ?? NO_OPTIONS;
   if (!isPlainObject(given)) fail("options must be a plain object.");
   checkUnknown(given, OPTION_KEYS, "");
   const config: PoolOptions = { ...FIXED, connectionLimit: 10, waitForConnections: true, queueLimit: 0 };
-  const connectionString = optionalString(given.connectionString, "connectionString");
+  const connectionString = optionalString(own(given, "connectionString"), "connectionString");
   if (connectionString !== undefined) config.uri = connectionString;
-  const host = optionalString(given.host, "host");
+  const host = optionalString(own(given, "host"), "host");
   if (host !== undefined) config.host = host;
-  const port = optionalCount(given.port, "port", 1, 65_535);
+  const port = optionalCount(own(given, "port"), "port", 1, 65_535);
   if (port !== undefined) config.port = port;
-  const user = optionalString(given.user, "user");
+  const user = optionalString(own(given, "user"), "user");
   if (user !== undefined) config.user = user;
-  const password = optionalString(given.password, "password");
+  const password = optionalString(own(given, "password"), "password");
   if (password !== undefined) config.password = password;
-  const database = optionalString(given.database, "database");
+  const database = optionalString(own(given, "database"), "database");
   if (database !== undefined) config.database = database;
-  const ssl: unknown = given.ssl;
+  const ssl: unknown = own(given, "ssl");
   if (ssl !== undefined) {
     if (typeof ssl !== "string" && !isPlainObject(ssl))
       fail("ssl must be a profile name or an object of TLS options.");
@@ -165,16 +171,16 @@ export function resolveOptions(options: MysqlOptions | undefined): PoolSettings 
   }
   let max = 10;
   let waitTimeoutMs = 0;
-  const pool: unknown = given.pool;
+  const pool: unknown = own(given, "pool");
   if (pool !== undefined) {
     if (!isPlainObject(pool))
       fail("pool must be pool settings ({ max, idleTimeoutMs, connectionTimeoutMs }).");
     checkUnknown(pool, POOL_KEYS, " in pool");
-    const poolMax = optionalCount(pool.max, "pool.max", 1, 100_000);
+    const poolMax = optionalCount(own(pool, "max"), "pool.max", 1, 100_000);
     if (poolMax !== undefined) max = poolMax;
-    const idle = optionalCount(pool.idleTimeoutMs, "pool.idleTimeoutMs", 0, MAX_MS);
+    const idle = optionalCount(own(pool, "idleTimeoutMs"), "pool.idleTimeoutMs", 0, MAX_MS);
     if (idle !== undefined) config.idleTimeout = idle;
-    const connect = optionalCount(pool.connectionTimeoutMs, "pool.connectionTimeoutMs", 0, MAX_MS);
+    const connect = optionalCount(own(pool, "connectionTimeoutMs"), "pool.connectionTimeoutMs", 0, MAX_MS);
     if (connect !== undefined && connect > 0) {
       config.connectTimeout = connect;
       waitTimeoutMs = connect;

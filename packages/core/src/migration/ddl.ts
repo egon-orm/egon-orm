@@ -23,6 +23,7 @@ import type { CompiledQuery, ParamSlot } from "../contracts/adapter.js";
 import type { FragmentNode } from "../contracts/query.js";
 import { CUSTOM_SQL_TYPE } from "../contracts/type.js";
 import { MigrationError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isLiteralText } from "./builder.js";
 import type { MigrationDialect } from "./dialect.js";
 import type {
@@ -255,7 +256,8 @@ export function typeSql(type: TypeSpec, serial: boolean, ctx: DdlContext): strin
       if (serial) return type.kind === "integer" ? dialect.serial.integer : dialect.serial.bigint;
       const name = dialect.columnTypes[type.kind];
       if (!dialect.precision) return name;
-      const fallback = dialect.defaultPrecision[type.kind];
+      // A partial table: a kind it lacks reads as absent, never from Object.prototype.
+      const fallback = own(dialect.defaultPrecision, type.kind);
       const precision = type.precision ?? fallback?.[0];
       if (precision === undefined) return name;
       const scale = type.precision === undefined ? fallback?.[1] : type.scale;
@@ -267,7 +269,7 @@ export function typeSql(type: TypeSpec, serial: boolean, ctx: DdlContext): strin
 /** The precision of a timestamp column, for a "now" default that must match it (MySQL). */
 function timePrecision(type: TypeSpec | undefined, ctx: DdlContext): number | undefined {
   if (type === undefined || type.kind === "array" || type.kind === "custom") return undefined;
-  return type.precision ?? ctx.dialect.defaultPrecision[type.kind]?.[0];
+  return type.precision ?? own(ctx.dialect.defaultPrecision, type.kind)?.[0];
 }
 
 /** A default as SQL; `type` is the column's, for a "now" that carries the column's precision. */

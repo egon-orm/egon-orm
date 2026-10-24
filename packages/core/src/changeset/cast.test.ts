@@ -116,6 +116,19 @@ describe("cast: permitted fields", () => {
     );
   });
 
+  test("a name permitted twice is cast once: one error, one change", () => {
+    const bad = cast(User, { age: "x", email: null }, ["age", "email", "age", "email"]);
+    expect(bad.errors).toEqual({
+      age: [{ message: "is invalid", validation: "cast", meta: { type: "integer" } }],
+      email: [{ message: "can't be blank", validation: "required", meta: {} }],
+    });
+    // The same as a cast over an earlier changeset, which never repeated an error.
+    expect(cast(cast(User, { age: "x" }, ["age"]), { age: "x" }, ["age"]).errors).toEqual({
+      age: [{ message: "is invalid", validation: "cast", meta: { type: "integer" } }],
+    });
+    expect(cast(User, { age: "36" }, ["age", "age"]).changes).toEqual({ age: 36 });
+  });
+
   test("throws when permitted is not an array or names are not strings", () => {
     expect(() => cast(User, {}, "email" as unknown as ["email"])).toThrow(QueryError);
     expect(() => cast(User, {}, [1 as unknown as "email"])).toThrow(QueryError);

@@ -10,6 +10,7 @@
 import type { CteNode, QueryAst } from "../../contracts/query.js";
 import { QueryError } from "../../errors.js";
 import { HASH_SEED, hashInt, hashString } from "../../internal/hash.js";
+import { own } from "../../internal/own.js";
 import { isPlainObject } from "../../internal/plain-object.js";
 
 /**
@@ -80,17 +81,19 @@ export function withCteNode(
       }
     }
     const given = options as { readonly recursive?: unknown; readonly materialized?: unknown };
-    if (given.recursive !== undefined && typeof given.recursive !== "boolean") {
+    const recursiveOption = own(given, "recursive");
+    const materializedOption = own(given, "materialized");
+    if (recursiveOption !== undefined && typeof recursiveOption !== "boolean") {
       throw new QueryError("query.cteRecursive", `withCte("${name}", …): recursive is true or false.`);
     }
-    if (given.materialized !== undefined && typeof given.materialized !== "boolean") {
+    if (materializedOption !== undefined && typeof materializedOption !== "boolean") {
       throw new QueryError(
         "query.cteMaterialized",
         `withCte("${name}", …): materialized is true or false, or left out to let the database decide.`,
       );
     }
-    recursive = given.recursive === true;
-    materialized = given.materialized;
+    recursive = recursiveOption === true;
+    materialized = materializedOption;
   }
   return { kind: "cte", name, query, operation: "all", recursive, materialized };
 }

@@ -51,6 +51,7 @@ import type {
 import type { AnySchema, FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { ROW } from "../contracts/schema.js";
 import { MultipleResultsError, NoResultsError, QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { schemaOfRow } from "../query/assoc.js";
 import {
@@ -316,8 +317,8 @@ function executeOptions(
 ): ExecuteOptions {
   if (options === undefined && call === undefined && batchSize === undefined) return info.bare;
   const shaped: CallOptions = {
-    signal: options?.signal,
-    timeoutMs: options?.timeoutMs,
+    signal: own(options, "signal"),
+    timeoutMs: own(options, "timeoutMs"),
     slots: plan.slots,
     context: call,
     batchSize,
@@ -396,7 +397,7 @@ function constantsOf(ast: QueryAst): readonly unknown[] {
 }
 
 function schemaFor(core: ReadCore, options: ReadOptions | undefined): string | undefined {
-  const schema = options?.schema;
+  const schema = own(options, "schema");
   return schema === undefined ? core.schema : schema;
 }
 
@@ -465,7 +466,7 @@ async function run<T>(
   finish: Finish<T>,
 ): Promise<T> {
   const hub = core.hub;
-  const call = hub.listening ? new Call(hub, operation, source, options?.context) : undefined;
+  const call = hub.listening ? new Call(hub, operation, source, own(options, "context")) : undefined;
   let result: RawResult;
   try {
     result = await core.executor.execute(
@@ -556,7 +557,7 @@ export async function load(
   const decoder = decoderFor(plan, adapter, core.codegen);
   const constants = constantsOf(ast);
   const hub = core.hub;
-  const call = hub.listening ? new Call(hub, operation, source, options?.context) : undefined;
+  const call = hub.listening ? new Call(hub, operation, source, own(options, "context")) : undefined;
   let result: RawResult;
   try {
     result = await core.executor.execute(
@@ -1229,9 +1230,9 @@ export async function* stream(
   const values = bindParams(plan.slots, ast.params, named);
   const decoder = decoderFor(plan, adapter, core.codegen);
   const constants = constantsOf(ast);
-  const batchSize = options?.batchSize ?? DEFAULT_STREAM_BATCH_SIZE;
+  const batchSize = own(options, "batchSize") ?? DEFAULT_STREAM_BATCH_SIZE;
   const hub = core.hub;
-  const call = hub.listening ? new Call(hub, "stream", sourceOf(ast), options?.context) : undefined;
+  const call = hub.listening ? new Call(hub, "stream", sourceOf(ast), own(options, "context")) : undefined;
   const rows = core.executor.stream(plan.sql, values, executeOptions(plan, info, options, call, batchSize));
   if (call === undefined) {
     for await (const row of rows) yield decoder(row, constants);
@@ -1278,8 +1279,8 @@ export async function explain(
   options: ExplainReadOptions | undefined,
 ): Promise<unknown> {
   const ast = input.ast;
-  const format = options?.format;
-  const analyze = options?.analyze;
+  const format = own(options, "format");
+  const analyze = own(options, "analyze");
   const explainOptions = {
     ...(analyze === undefined ? {} : { analyze }),
     ...(format === undefined ? {} : { format }),

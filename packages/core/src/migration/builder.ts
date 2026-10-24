@@ -9,6 +9,7 @@
  */
 import type { FragmentNode } from "../contracts/query.js";
 import { CUSTOM_SQL_TYPE } from "../contracts/type.js";
+import { frozenOptions, own } from "../internal/own.js";
 import { isPlainObject as hasPlainPrototype } from "../internal/plain-object.js";
 import { defaultName } from "./names.js";
 import type {
@@ -89,8 +90,19 @@ function checkName(where: string, what: string, name: unknown): string {
   return name;
 }
 
-function checkOptions(where: string, options: unknown, keys: readonly string[]): Record<string, unknown> {
-  if (options === undefined) return {};
+/**
+ * The options of a call without any. Options are read as own properties only (with
+ * `own()`), so a key planted on `Object.prototype` is never an option; this default has no
+ * prototype either.
+ */
+const NO_OPTIONS: Readonly<Record<string, unknown>> = /* @__PURE__ */ frozenOptions({});
+
+function checkOptions(
+  where: string,
+  options: unknown,
+  keys: readonly string[],
+): Readonly<Record<string, unknown>> {
+  if (options === undefined) return NO_OPTIONS;
   if (!isPlainObject(options)) throw new TypeError(`${where}: options must be a plain object.`);
   for (const key of Object.keys(options)) {
     if (!keys.includes(key)) {
@@ -102,15 +114,19 @@ function checkOptions(where: string, options: unknown, keys: readonly string[]):
   return options;
 }
 
-function optionalBoolean(where: string, options: Record<string, unknown>, key: string): boolean {
-  const value = options[key];
+function optionalBoolean(where: string, options: Readonly<Record<string, unknown>>, key: string): boolean {
+  const value = own(options, key);
   if (value === undefined) return false;
   if (typeof value !== "boolean") throw new TypeError(`${where}: the option "${key}" must be a boolean.`);
   return value;
 }
 
-function optionalName(where: string, options: Record<string, unknown>, key: string): string | undefined {
-  const value = options[key];
+function optionalName(
+  where: string,
+  options: Readonly<Record<string, unknown>>,
+  key: string,
+): string | undefined {
+  const value = own(options, key);
   return value === undefined ? undefined : checkName(where, `option "${key}"`, value);
 }
 
@@ -188,18 +204,19 @@ export function typeSpec(where: string, type: unknown): TypeSpec {
       `${where}: a column type is a name ("integer") or an object ({ kind: "decimal", … }).`,
     );
   }
-  const kind = type.kind;
+  // A column type object is read like options: own properties only.
+  const kind = own(type, "kind");
   if (kind === "array") {
     return {
       kind: "array",
       precision: undefined,
       scale: undefined,
-      of: typeSpec(where, type.of),
+      of: typeSpec(where, own(type, "of")),
       sql: undefined,
     };
   }
   if (kind === "custom") {
-    const sql = type.sql;
+    const sql = own(type, "sql");
     if (typeof sql !== "string" || !CUSTOM_SQL_TYPE.test(sql)) {
       throw new TypeError(
         `${where}: a custom column type's sql must be a plain type name (letters, digits, underscores, single spaces or dots, an optional (n) or (n, m) and [] pairs). It is written into the SQL as it is, so anything else is refused.`,
@@ -210,19 +227,21 @@ export function typeSpec(where: string, type: unknown): TypeSpec {
   if (typeof kind !== "string" || !KINDS.has(kind)) {
     throw new TypeError(`${where}: unknown column type kind ${JSON.stringify(kind)}.`);
   }
+  const givenPrecision = own(type, "precision");
+  const givenScale = own(type, "scale");
   let precision: number | undefined;
   let scale: number | undefined;
   if (kind === "decimal") {
-    if (type.precision !== undefined)
-      precision = wholeNumber(where, "a decimal's precision", type.precision, 1);
-    if (type.scale !== undefined) {
+    if (givenPrecision !== undefined)
+      precision = wholeNumber(where, "a decimal's precision", givenPrecision, 1);
+    if (givenScale !== undefined) {
       if (precision === undefined) throw new TypeError(`${where}: a decimal's scale needs a precision.`);
-      scale = wholeNumber(where, "a decimal's scale", type.scale, 0);
+      scale = wholeNumber(where, "a decimal's scale", givenScale, 0);
     }
   } else if (PRECISION_KINDS.has(kind)) {
-    if (type.precision !== undefined)
-      precision = wholeNumber(where, `a ${kind}'s precision`, type.precision, 0);
-  } else if (type.precision !== undefined || type.scale !== undefined) {
+    if (givenPrecision !== undefined)
+      precision = wholeNumber(where, `a ${kind}'s precision`, givenPrecision, 0);
+  } else if (givenPrecision !== undefined || givenScale !== undefined) {
     throw new TypeError(`${where}: a ${kind} column takes no precision or scale.`);
   }
   return { kind: kind as ColumnKind, precision, scale, of: undefined, sql: undefined };
@@ -616,7 +635,7 @@ export class ColumnAdder {
       options = nameOrOptions;
     }
     const checked = checkOptions(where, options, ["type"]);
-    const kind = checked.type ?? "bigint";
+    const kind = own(checked, "type") ?? "bigint";
     if (kind !== "bigint" && kind !== "integer") {
       throw new TypeError(`${where}: the option "type" must be "bigint" or "integer".`);
     }
@@ -640,7 +659,7 @@ export class ColumnAdder {
       "name",
     ]);
     const column = checkName(where, "column name", name);
-    const builder = this.column(column, typeSpec(where, checked.type ?? "bigint"), false);
+    const builder = this.column(column, typeSpec(where, own(checked, "type") ?? "bigint"), false);
     const def = this.#last as ColumnDef;
     def.references = {
       name:
@@ -651,8 +670,8 @@ export class ColumnAdder {
         schema: optionalName(where, checked, "schema"),
       },
       column: optionalName(where, checked, "column") ?? "id",
-      onDelete: referenceAction(where, "onDelete", checked.onDelete),
-      onUpdate: referenceAction(where, "onUpdate", checked.onUpdate),
+      onDelete: referenceAction(where, "onDelete", own(checked, "onDelete")),
+      onUpdate: referenceAction(where, "onUpdate", own(checked, "onUpdate")),
     };
     return builder;
   }
@@ -692,7 +711,7 @@ export class ColumnAdder {
   timestamps(options?: TimestampsColumnsOptions): void {
     const where = `${this.context.where}: timestamps()`;
     const checked = checkOptions(where, options, ["type", "createdAt", "updatedAt"]);
-    const kind = checked.type ?? "timestamptz";
+    const kind = own(checked, "type") ?? "timestamptz";
     if (kind !== "timestamptz" && kind !== "timestamp") {
       throw new TypeError(`${where}: the option "type" must be "timestamptz" or "timestamp".`);
     }
@@ -714,10 +733,8 @@ export class ColumnAdder {
     options: { readonly precision?: number } | undefined,
   ): ColumnBuilder {
     const checked = checkOptions(`${this.context.where}: ${kind}()`, options, ["precision"]);
-    return this.add(
-      name,
-      (checked.precision === undefined ? kind : { kind, precision: checked.precision }) as ColumnType,
-    );
+    const precision = own(checked, "precision");
+    return this.add(name, (precision === undefined ? kind : { kind, precision }) as ColumnType);
   }
 
   private column(name: string, type: TypeSpec, serial: boolean): ColumnBuilder {
@@ -797,8 +814,10 @@ export class AlterTableBuilder extends ColumnAdder {
     const checked = checkOptions(where, options, ["notNull", "default"]);
     const column = checkName(where, "column name", name);
     const spec = typeSpec(where, type);
-    const notNull = checked.notNull === undefined ? undefined : optionalBoolean(where, checked, "notNull");
-    const def = checked.default === undefined ? undefined : nullableDefault(where, spec, checked.default);
+    const given = own(checked, "default");
+    const notNull =
+      own(checked, "notNull") === undefined ? undefined : optionalBoolean(where, checked, "notNull");
+    const def = given === undefined ? undefined : nullableDefault(where, spec, given);
     this.#changes.push({
       change: "modify",
       column,
@@ -1225,7 +1244,7 @@ export class MigrationBuilder {
     });
   }
 
-  #ref(where: string, name: unknown, options: Record<string, unknown>): TableRef {
+  #ref(where: string, name: unknown, options: Readonly<Record<string, unknown>>): TableRef {
     return { name: checkName(where, "table name", name), schema: optionalName(where, options, "schema") };
   }
 
@@ -1233,12 +1252,13 @@ export class MigrationBuilder {
     where: string,
     name: unknown,
     define: unknown,
-    options: Record<string, unknown>,
+    options: Readonly<Record<string, unknown>>,
   ): Omit<CreateTableOp, "ifNotExists"> {
     const table = this.#ref(where, name, options);
     if (typeof define !== "function")
       throw new TypeError(`${where}: the table definition must be a function.`);
-    if (options.primaryKey !== undefined && options.primaryKey !== false) {
+    const primaryKey = own(options, "primaryKey");
+    if (primaryKey !== undefined && primaryKey !== false) {
       throw new TypeError(
         `${where}: the option "primaryKey" can only be false (a table without a primary key).`,
       );
@@ -1249,10 +1269,10 @@ export class MigrationBuilder {
     );
     if (columns.length === 0) throw new TypeError(`${where}: the table has no columns.`);
     const keyed = columns.some((column) => column.primaryKey);
-    if (options.primaryKey === false && keyed) {
+    if (primaryKey === false && keyed) {
       throw new TypeError(`${where}: primaryKey: false was given, but a column is declared .primaryKey().`);
     }
-    if (options.primaryKey === undefined && !keyed) {
+    if (primaryKey === undefined && !keyed) {
       throw new TypeError(
         `${where}: the table has no primary key. Add t.id() or call .primaryKey() on its key columns, or pass { primaryKey: false } for a table without one.`,
       );
@@ -1283,7 +1303,7 @@ export class MigrationBuilder {
     where: string,
     table: TableRef,
     columns: readonly (string | FragmentNode)[],
-    options: Record<string, unknown>,
+    options: Readonly<Record<string, unknown>>,
   ): string {
     const unique = optionalBoolean(where, options, "unique");
     const name = optionalName(where, options, "name");
@@ -1294,18 +1314,24 @@ export class MigrationBuilder {
     return defaultName(table.name, columns as string[], unique ? "key" : "index", this.#maxBytes);
   }
 
-  #index(where: string, table: unknown, columns: unknown, options: Record<string, unknown>): IndexDef {
+  #index(
+    where: string,
+    table: unknown,
+    columns: unknown,
+    options: Readonly<Record<string, unknown>>,
+  ): IndexDef {
     const ref = this.#ref(where, table, options);
     const nodes = this.#indexColumns(where, columns);
     const unique = optionalBoolean(where, options, "unique");
     const name = this.#indexName(where, ref, nodes, options);
     let predicate: FragmentNode | undefined;
-    if (options.where !== undefined) {
-      const { node, params } = fragmentOf(where, "the option where", options.where);
+    const condition = own(options, "where");
+    if (condition !== undefined) {
+      const { node, params } = fragmentOf(where, "the option where", condition);
       if (params.length > 0) throw boundInDdl(where, "an index predicate");
       predicate = node;
     }
-    const include = options.include;
+    const include = own(options, "include");
     if (include !== undefined && !Array.isArray(include)) {
       throw new TypeError(`${where}: the option "include" must be an array of column names.`);
     }
@@ -1322,13 +1348,14 @@ export class MigrationBuilder {
   }
 }
 
-function constraintDef(where: string, options: Record<string, unknown>): ConstraintDef {
-  const { check, exclude } = options;
+function constraintDef(where: string, options: Readonly<Record<string, unknown>>): ConstraintDef {
+  const check = own(options, "check");
+  const exclude = own(options, "exclude");
   if ((check === undefined) === (exclude === undefined)) {
     throw new TypeError(`${where}: give exactly one of { check } and { exclude }.`);
   }
   const kind = check === undefined ? "exclude" : "check";
-  if (kind === "check" && options.using !== undefined) {
+  if (kind === "check" && own(options, "using") !== undefined) {
     throw new TypeError(`${where}: the option "using" belongs to { exclude }.`);
   }
   const { node, params } = fragmentOf(where, `the option ${kind}`, check ?? exclude);

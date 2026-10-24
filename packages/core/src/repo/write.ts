@@ -78,6 +78,8 @@ import {
   rewrap,
   StaleEntryError,
 } from "../errors.js";
+import { distinct } from "../internal/distinct.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { collectParams } from "../query/ast.js";
 import { from } from "../query/builder.js";
@@ -293,7 +295,8 @@ function fieldList(schemaMeta: SchemaMeta, names: unknown, where: string): reado
   if (!Array.isArray(names) || names.length === 0) {
     throw new QueryError("query.writeOptionFields", `${where} must be a non-empty list of field names.`);
   }
-  return names.map((name) => persistedField(schemaMeta, name, where));
+  // A name listed twice is one field (owner decision, 2026-10-24).
+  return distinct(names.map((name) => persistedField(schemaMeta, name, where)));
 }
 
 /**
@@ -348,7 +351,7 @@ export function conflictOption(
   }
   let target: OnConflict & object extends { target: infer T } ? T : never;
   let params: readonly unknown[] = NONE;
-  const rawTarget = given.target;
+  const rawTarget = own(given, "target");
   if (rawTarget === undefined) {
     target = undefined;
   } else if (Array.isArray(rawTarget)) {
@@ -363,7 +366,7 @@ export function conflictOption(
     rawTarget !== null &&
     isPlainObject(rawTarget) &&
     Object.keys(rawTarget).length === 1 &&
-    typeof (rawTarget as { constraint?: unknown }).constraint === "string" &&
+    typeof own(rawTarget as { constraint?: unknown }, "constraint") === "string" &&
     (rawTarget as { constraint: string }).constraint !== ""
   ) {
     target = { constraint: (rawTarget as { constraint: string }).constraint };
@@ -373,7 +376,7 @@ export function conflictOption(
       `${where}'s target is a list of field names, { constraint: "name" } or a fragment, but it is ${describe(rawTarget)}.`,
     );
   }
-  const rawUpdate = given.update;
+  const rawUpdate = own(given, "update");
   let update: Exclude<OnConflict, "nothing">["update"];
   if (rawUpdate === "all") {
     update = "all";
@@ -384,7 +387,7 @@ export function conflictOption(
     rawUpdate !== null &&
     isPlainObject(rawUpdate) &&
     Object.keys(rawUpdate).length === 1 &&
-    Array.isArray((rawUpdate as { except?: unknown }).except)
+    Array.isArray(own(rawUpdate as { except?: unknown }, "except"))
   ) {
     update = {
       except: fieldList(schemaMeta, (rawUpdate as { except: unknown }).except, `${where}'s except`),
@@ -409,14 +412,16 @@ function checkBooleanOption(method: string, name: string, value: unknown): boole
 function staleErrorOption(method: string, value: unknown): StaleErrorOption | undefined {
   if (value === undefined) return undefined;
   const given = value as { readonly field?: unknown; readonly message?: unknown };
+  const field = typeof value === "object" && value !== null ? own(given, "field") : undefined;
+  const message = typeof value === "object" && value !== null ? own(given, "message") : undefined;
   if (
     typeof value !== "object" ||
     value === null ||
     !isPlainObject(value) ||
-    typeof given.field !== "string" ||
-    given.field === "" ||
-    given.field === "__proto__" ||
-    (given.message !== undefined && typeof given.message !== "string") ||
+    typeof field !== "string" ||
+    field === "" ||
+    field === "__proto__" ||
+    (message !== undefined && typeof message !== "string") ||
     Object.keys(value).some((key) => key !== "field" && key !== "message")
   ) {
     throw new TypeError(
@@ -440,15 +445,15 @@ export function writeSettings(
   const checked = checkReadOptions<ReadOptions>(method, options, keys);
   if (checked === undefined) return NO_SETTINGS;
   const given = checked as Readonly<Record<string, unknown>>;
-  const conflict = conflictOption(schemaMeta, given.onConflict, method);
+  const conflict = conflictOption(schemaMeta, own(given, "onConflict"), method);
   return {
     options: checked,
-    returning: returningOption(schemaMeta, given.returning, method),
+    returning: returningOption(schemaMeta, own(given, "returning"), method),
     onConflict: conflict.onConflict,
     conflictParams: conflict.params,
-    force: checkBooleanOption(method, "force", given.force),
-    staleError: staleErrorOption(method, given.staleError),
-    allowStale: checkBooleanOption(method, "allowStale", given.allowStale),
+    force: checkBooleanOption(method, "force", own(given, "force")),
+    staleError: staleErrorOption(method, own(given, "staleError")),
+    allowStale: checkBooleanOption(method, "allowStale", own(given, "allowStale")),
   };
 }
 
@@ -470,7 +475,7 @@ interface CallOptions {
  * `timeoutMs`; `undefined` without one.
  */
 export function deadlineOf(options: ReadOptions | undefined): number | undefined {
-  const timeoutMs = options?.timeoutMs;
+  const timeoutMs = own(options, "timeoutMs");
   return typeof timeoutMs === "number" ? now() + timeoutMs : undefined;
 }
 
@@ -479,7 +484,7 @@ export function remaining(
   options: ReadOptions | undefined,
   deadline: number | undefined,
 ): number | undefined {
-  return deadline === undefined ? options?.timeoutMs : Math.max(0, deadline - now());
+  return deadline === undefined ? own(options, "timeoutMs") : Math.max(0, deadline - now());
 }
 
 /**
@@ -525,9 +530,9 @@ export async function runWrite<T, E>(
   extra: E,
 ): Promise<T> {
   const hub = core.hub;
-  const call = hub.listening ? new Call(hub, operation, source, options?.context) : undefined;
+  const call = hub.listening ? new Call(hub, operation, source, own(options, "context")) : undefined;
   const shaped: CallOptions = {
-    signal: options?.signal,
+    signal: own(options, "signal"),
     timeoutMs: remaining(options, deadline),
     slots: plan.slots,
     context: call,
@@ -559,9 +564,10 @@ export async function runWrite<T, E>(
  */
 export function overBudget(error: unknown, options: ReadOptions | undefined): unknown {
   if (!(error instanceof DatabaseError) || error.code !== "timeout") return error;
+  const timeoutMs = own(options, "timeoutMs");
   return new DatabaseError(
     "database.callTimeout",
-    `The call ran longer than its timeoutMs (${options?.timeoutMs} ms), which covers every statement it runs.`,
+    `The call ran longer than its timeoutMs (${timeoutMs} ms), which covers every statement it runs.`,
     { code: "timeout", ...(error.sql === undefined ? {} : { sql: error.sql }), cause: error },
   );
 }
@@ -579,7 +585,7 @@ export async function acquireWithin(
   deadline: number | undefined,
   what = "write",
 ): Promise<Connection> {
-  const signal = options?.signal;
+  const signal = own(options, "signal");
   if (signal?.aborted === true) {
     throw new DatabaseError("database.abortedBefore", `The ${what} was not run: its AbortSignal had fired.`, {
       code: "aborted",
@@ -611,12 +617,13 @@ export async function acquireWithin(
         ),
       );
     if (deadline !== undefined) {
+      const timeoutMs = own(options, "timeoutMs");
       timer = setTimeout(
         () =>
           giveUp(
             new DatabaseError(
               "database.timeoutWaiting",
-              `The ${what} was not run: it waited longer than its timeoutMs (${options?.timeoutMs} ms) for a free connection.`,
+              `The ${what} was not run: it waited longer than its timeoutMs (${timeoutMs} ms) for a free connection.`,
               { code: "timeout" },
             ),
           ),
@@ -893,9 +900,9 @@ function blank(changeset: AnyChangeset, fields: readonly FieldMeta[]): AnyChange
 function writeSchema(
   core: ReadCore,
   options: ReadOptions | undefined,
-  own: string | undefined,
+  fallback: string | undefined,
 ): string | undefined {
-  return options?.schema ?? own ?? core.schema;
+  return own(options, "schema") ?? fallback ?? core.schema;
 }
 
 /** `list` with `item` appended, made when it is the first. */
@@ -955,7 +962,7 @@ function staleOutcome(
   if (stale !== undefined) {
     return failure(
       withErrors(changeset, stale.field, [
-        { message: stale.message ?? "is stale", validation: "stale", meta: { stale: true } },
+        { message: own(stale, "message") ?? "is stale", validation: "stale", meta: { stale: true } },
       ]),
     );
   }
@@ -1225,8 +1232,8 @@ async function writeThenRead(
   const options: ReadOptions = {
     schema: undefined,
     timeoutMs: remaining(settings.options, deadline),
-    signal: settings.options?.signal,
-    context: settings.options?.context,
+    signal: own(settings.options, "signal"),
+    context: own(settings.options, "context"),
   };
   let rows: readonly unknown[];
   try {
@@ -1650,7 +1657,7 @@ export async function validateUnique(
   if (!fields.some((field) => hasOwn(changes, field))) return changeset;
   if (fields.some((field) => hasOwn(changeset.errors, field))) return changeset;
   // One message per key: an error already on errorKey stands, so the database is not asked.
-  const key = options?.errorKey ?? (fields[0] as string);
+  const key = own(options, "errorKey") ?? (fields[0] as string);
   if (hasOwn(changeset.errors, key)) return changeset;
   const values = fields.map((field) => changeset.getField(field));
   if (values.some((value) => value === null || value === undefined)) return changeset;
@@ -1660,10 +1667,10 @@ export async function validateUnique(
     const t = bindings.t;
     const same: Condition[] = fields.map((field, i) => (t[field] as Col<unknown>).eq(values[i] as never));
     if (data !== null && schemaMeta.primaryKey.length > 0) {
-      const own = schemaMeta.primaryKey.map((field) =>
+      const itself = schemaMeta.primaryKey.map((field) =>
         (t[field.name] as Col<unknown>).eq(data[field.name] as never),
       );
-      same.push(not(allOf(own)) as Condition);
+      same.push(not(allOf(itself)) as Condition);
     }
     return allOf(same);
   };
@@ -1673,7 +1680,7 @@ export async function validateUnique(
   if (rowSchema !== undefined) query = query.schema(rowSchema);
   if (!(await repo.exists(query))) return changeset;
   const errorMeta = { fields: [...fields] };
-  const message = options?.message;
+  const message = own(options, "message");
   const text =
     typeof message === "function"
       ? String((message as (meta: Readonly<Record<string, unknown>>) => unknown)(errorMeta))

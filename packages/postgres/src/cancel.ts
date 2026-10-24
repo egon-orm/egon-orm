@@ -103,7 +103,8 @@ function tlsOptions(target: CancelTarget, socket: Socket, isIP: SocketModules["i
     // pg makes `key` (a client certificate's private key) non-enumerable so that it does
     // not show up in logs, and Object.assign skips it; pg copies it explicitly, so must we.
     // It is the only TLS option pg treats that way.
-    if ("key" in target.ssl) options.key = target.ssl.key;
+    // An own property only: a `key` planted on Object.prototype is no private key.
+    if (Object.hasOwn(target.ssl, "key")) options.key = target.ssl.key;
   }
   if (target.sslNegotiation === "direct") options.ALPNProtocols = ["postgresql"];
   // SNI must not be an IP address (RFC 6066, section 3).

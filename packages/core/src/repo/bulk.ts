@@ -44,6 +44,7 @@ import type {
 } from "../contracts/query.js";
 import type { AnySchema, FieldMeta, FieldNames, InsertShape, SchemaMeta } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { isPlainObject } from "../internal/plain-object.js";
 import { needsFieldType } from "../query/advanced/assignments.js";
 import { PreparedQuery } from "../query/advanced/prepare.js";
@@ -240,13 +241,13 @@ function pushCell(
  * (`IN (?, ?, ?)`), one where it is bound as an array.
  */
 function bindExpr(node: ExprNode, values: unknown[], names: NamedParamNode[], expandLists: boolean): number {
-  const own: unknown[] = [];
+  const inline: unknown[] = [];
   const lists: number[] = [];
   const named: NamedParamNode[] = [];
-  collectParams(node, own, lists, named);
-  for (const value of own) values.push(value);
+  collectParams(node, inline, lists, named);
+  for (const value of inline) values.push(value);
   for (const each of named) names.push(each);
-  let params = own.length + named.length;
+  let params = inline.length + named.length;
   if (expandLists) for (const length of lists) params += Math.max(0, length - 1);
   return params;
 }
@@ -289,7 +290,7 @@ function checkPlaceholders(
       { params: { unknown: unknown[0] as string } },
     );
   }
-  const missing = [...names].filter((name) => placeholders === undefined || placeholders[name] === undefined);
+  const missing = [...names].filter((name) => own(placeholders, name) === undefined);
   if (missing.length > 0) {
     throw new QueryError(
       "query.placeholdersMissing",
@@ -327,9 +328,9 @@ interface InsertAllSettings {
 
 function insertAllSettings(schemaMeta: SchemaMeta, options: unknown): InsertAllSettings {
   const checked = checkReadOptions<ReadOptions>("insertAll", options, INSERT_ALL_OPTION_KEYS);
-  const given = (checked ?? {}) as Readonly<Record<string, unknown>>;
-  const conflict = conflictOption(schemaMeta, given.onConflict, "insertAll");
-  const placeholders = given.placeholders;
+  const given = checked as Readonly<Record<string, unknown>> | undefined;
+  const conflict = conflictOption(schemaMeta, own(given, "onConflict"), "insertAll");
+  const placeholders = own(given, "placeholders");
   if (
     placeholders !== undefined &&
     (typeof placeholders !== "object" || placeholders === null || !isPlainObject(placeholders))
@@ -340,7 +341,7 @@ function insertAllSettings(schemaMeta: SchemaMeta, options: unknown): InsertAllS
   }
   return {
     options: checked,
-    returning: returningOption(schemaMeta, given.returning, "insertAll"),
+    returning: returningOption(schemaMeta, own(given, "returning"), "insertAll"),
     onConflict: conflict.onConflict,
     conflictParams: conflict.params,
     placeholders: placeholders as Readonly<Record<string, unknown>> | undefined,
@@ -374,7 +375,7 @@ export async function insertAll(
     schemaMeta,
     whole: settings.returning === undefined ? undefined : settings.returning === true,
   };
-  const databaseSchema = settings.options?.schema ?? schemaMeta.schema ?? core.schema;
+  const databaseSchema = own(settings.options, "schema") ?? schemaMeta.schema ?? core.schema;
   if (isQueryLike(source))
     return insertFromQuery(core, schemaMeta, source.ast, settings, returning, back, databaseSchema);
   if (!Array.isArray(source)) {
@@ -756,7 +757,7 @@ export async function modifyAll(
     READ_OPTION_KEYS,
   );
   const options = split.options;
-  const schema = options?.schema ?? core.schema;
+  const schema = own(options, "schema") ?? core.schema;
   // A prepared query keeps its plan; anything else is found in the adapter's plan cache.
   const plan =
     queryable instanceof PreparedQuery

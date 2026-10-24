@@ -9,6 +9,7 @@ import type { DriverConnection, DriverCursor, DriverWrapper } from "../adapter/d
 import { createCompiler } from "../compiler/compiler.js";
 import { POSTGRES_CAPABILITIES, postgresDialect } from "../compiler/dialect.js";
 import type { Capabilities, PoolEvent, RawResult } from "../contracts/adapter.js";
+import { own } from "../internal/own.js";
 import { MigrationBuilder } from "./builder.js";
 import { type DdlContext, emitOperation } from "./ddl.js";
 import { POSTGRES_MIGRATION_DIALECT } from "./dialect.js";
@@ -81,9 +82,9 @@ export function fakeDatabase(options: FakeDatabaseOptions = {}): FakeDatabase {
   const statements: SeenStatement[] = [];
   const released: number[] = [];
   const destroyed: number[] = [];
-  let exists = options.applied !== undefined;
-  let columns = new Set(options.columns ?? ["version", "created_at"]);
-  let committed = new Set(options.applied ?? []);
+  let exists = own(options, "applied") !== undefined;
+  let columns = new Set(own(options, "columns") ?? ["version", "created_at"]);
+  let committed = new Set(own(options, "applied") ?? []);
   let lockHolder: number | undefined;
   const waiting: (() => void)[] = [];
   let next = 0;
@@ -104,9 +105,9 @@ export function fakeDatabase(options: FakeDatabaseOptions = {}): FakeDatabase {
       return {
         async query(sql, params): Promise<RawResult> {
           statements.push({ connection: id, sql, params });
-          const failure = options.fail?.(sql);
+          const failure = own(options, "fail")?.(sql);
           if (failure !== undefined) throw failure;
-          if (options.hang?.(sql) === true) {
+          if (own(options, "hang")?.(sql) === true) {
             // Runs until it is cancelled, as a statement past its timeout does.
             await new Promise<void>((resolve) => waiting.push(resolve));
             throw new Error("canceling statement due to statement timeout");
@@ -121,7 +122,7 @@ export function fakeDatabase(options: FakeDatabaseOptions = {}): FakeDatabase {
             return rows([]);
           }
           if (sql === "rollback") {
-            if (options.failRollback === true) throw new Error("rollback failed");
+            if (own(options, "failRollback") === true) throw new Error("rollback failed");
             transaction = undefined;
             return rows([]);
           }
@@ -137,7 +138,7 @@ export function fakeDatabase(options: FakeDatabaseOptions = {}): FakeDatabase {
             return rows([{}]);
           }
           if (sql.startsWith("select pg_advisory_unlock")) {
-            if (options.failUnlock === true) throw new Error("unlock failed");
+            if (own(options, "failUnlock") === true) throw new Error("unlock failed");
             if (lockHolder === id) lockHolder = undefined;
             for (const wake of waiting.splice(0)) wake();
             return rows([{}]);
@@ -200,7 +201,7 @@ export function fakeDatabase(options: FakeDatabaseOptions = {}): FakeDatabase {
   const newAdapter = (): DatabaseAdapter =>
     createAdapter({
       dialect: "postgres",
-      capabilities: options.capabilities ?? POSTGRES_CAPABILITIES,
+      capabilities: own(options, "capabilities") ?? POSTGRES_CAPABILITIES,
       quoteIdentifier: (name) => `"${name.replaceAll('"', '""')}"`,
       driver: () => driver,
       driverCodecs: {},

@@ -14,6 +14,7 @@ import type {
 import type { FragmentNode, QueryAst, QueryNode, QueryOperation } from "../contracts/query.js";
 import type { FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { collectParams, shapeOf } from "../query/ast.js";
 import { PlanCache, type PlanCacheStats } from "./cache.js";
 import type { SqlDialect } from "./dialect.js";
@@ -87,14 +88,14 @@ export class Compiler {
    * @param options Cache size and type conversions.
    * @throws RangeError when `planCacheSize` is not a positive integer.
    */
-  constructor(dialect: SqlDialect, options: CompilerOptions = {}) {
+  constructor(dialect: SqlDialect, options?: CompilerOptions) {
     this.dialect = dialect;
-    this.#codecs = options.codecs ?? OWN_CONVERSIONS;
+    this.#codecs = own(options, "codecs") ?? OWN_CONVERSIONS;
     this.#expands = !dialect.capabilities.arrayParams;
     this.#cache = new PlanCache({
-      capacity: options.planCacheSize ?? 1000,
+      capacity: own(options, "planCacheSize") ?? 1000,
       keyLists: !dialect.capabilities.arrayParams,
-      keyOf: options.keyOf,
+      keyOf: own(options, "keyOf"),
     });
   }
 
@@ -137,8 +138,8 @@ export class Compiler {
     schema: string | undefined,
     options: ExplainOptions,
   ): CompiledQuery {
-    const analyze = options.analyze ?? false;
-    const format = options.format;
+    const analyze = own(options, "analyze") ?? false;
+    const format = own(options, "format");
     if (typeof analyze !== "boolean")
       throw new QueryError("query.explainAnalyze", "explain's analyze option is true or false.");
     if (format !== undefined && format !== "text" && format !== "json") {
@@ -263,7 +264,7 @@ export class Compiler {
       key += `q${source.query.shape}`;
       nodes.push(source.query);
     } else throw new QueryError("query.astInsertSource", "An insert's source is values, cells or a query.");
-    key += `|${conflictKey(options.onConflict, nodes)}`;
+    key += `|${conflictKey(own(options, "onConflict"), nodes)}`;
     // Where lists are expanded, the lengths of the lists in the AST parts are part of the SQL.
     if (this.#expands && nodes.length > 0) key += `|l${listLengthsOf(nodes).join(",")}`;
     const cached = this.#cache.getWrite(key, nodes);
@@ -366,11 +367,11 @@ function checkInsertFields(
 ): void {
   checkFields(meta, columns, "The insert's column list");
   checkFields(meta, options.returning, "The returning list");
-  const conflict = options.onConflict;
+  const conflict = own(options, "onConflict");
   if (typeof conflict !== "object" || conflict === null) return;
-  if (Array.isArray(conflict.target))
-    checkFields(meta, conflict.target as readonly FieldMeta[], "onConflict's target");
-  const update = conflict.update;
+  const target = own(conflict, "target");
+  if (Array.isArray(target)) checkFields(meta, target as readonly FieldMeta[], "onConflict's target");
+  const update = own(conflict, "update");
   if (Array.isArray(update)) checkFields(meta, update as readonly FieldMeta[], "onConflict's update list");
   const except = exceptOf(update);
   if (except !== undefined) checkFields(meta, except, "onConflict's except list");
@@ -378,7 +379,7 @@ function checkInsertFields(
 
 function exceptOf(update: unknown): readonly FieldMeta[] | undefined {
   if (typeof update !== "object" || update === null || Array.isArray(update)) return undefined;
-  const except = (update as { readonly except?: unknown }).except;
+  const except = own(update as { readonly except?: unknown }, "except");
   return Array.isArray(except) ? (except as readonly FieldMeta[]) : undefined;
 }
 
@@ -441,15 +442,16 @@ function conflictKey(conflict: OnConflict | undefined, nodes: QueryNode[]): stri
   if (conflict === "nothing") return "n";
   if (typeof conflict !== "object" || conflict === null) return "?";
   let key = "u";
-  const target = conflict.target;
+  const target = own(conflict, "target");
   if (target === undefined) key += "-";
   else if (Array.isArray(target)) key += `f${fieldsKey(target as readonly FieldMeta[])}`;
-  else if ("kind" in target && target.kind === "fragment") {
-    key += `x${shapeOf(target)}`;
-    nodes.push(target);
-  } else if ("constraint" in target) key += `c${JSON.stringify(target.constraint)}`;
+  else if (Object.hasOwn(target, "kind") && (target as FragmentNode).kind === "fragment") {
+    key += `x${shapeOf(target as FragmentNode)}`;
+    nodes.push(target as FragmentNode);
+  } else if (Object.hasOwn(target, "constraint"))
+    key += `c${JSON.stringify((target as { readonly constraint: string }).constraint)}`;
   else key += "?";
-  const update = conflict.update;
+  const update = own(conflict, "update");
   if (update === "all") key += ":a";
   else if (Array.isArray(update)) key += `:f${fieldsKey(update as readonly FieldMeta[])}`;
   else {

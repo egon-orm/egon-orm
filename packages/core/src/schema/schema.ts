@@ -24,6 +24,7 @@ import { SchemaDefinitionError } from "../errors.js";
 import { generateFunction } from "../internal/codegen.js";
 import { formatStruct, REDACTED } from "../internal/inspect.js";
 import { camelToSnake } from "../internal/naming.js";
+import { own } from "../internal/own.js";
 import type { ResolvedAssoc } from "./assoc.js";
 import { reservedName, resolveAssocs } from "./assoc.js";
 import type { FieldState } from "./field.js";
@@ -507,9 +508,9 @@ function adopt(schema: unknown, inherited: unknown): Meta {
       `Expected a schema class (a class that extends Schema(...) or EmbeddedSchema(...)), but got ${describe(schema)}.`,
     );
   }
-  const own = makeMeta(sharedOf(base as Meta), schema as AnySchema, schema.name || (base as Meta).name);
-  Object.defineProperty(schema, META, { value: own });
-  return own;
+  const metadata = makeMeta(sharedOf(base as Meta), schema as AnySchema, schema.name || (base as Meta).name);
+  Object.defineProperty(schema, META, { value: metadata });
+  return metadata;
 }
 
 /**
@@ -582,14 +583,14 @@ function defineSchema(
       `${label}: the options must be an object, but got ${describe(options)}.`,
     );
   }
-  const schema: unknown = options?.schema;
+  const schema: unknown = own(options, "schema");
   if (schema !== undefined && (typeof schema !== "string" || schema === "")) {
     throw new SchemaDefinitionError(
       "schema.schemaOption",
       `${label}: schema must be the name of the database schema, as a non-empty string.`,
     );
   }
-  const keyless: unknown = options?.primaryKey;
+  const keyless: unknown = own(options, "primaryKey");
   if (keyless !== undefined && keyless !== false) {
     throw new SchemaDefinitionError(
       "schema.primaryKeyOption",
@@ -598,7 +599,7 @@ function defineSchema(
   }
   // A table's columns are snake_case by default; the keys of an embedded JSON object keep
   // the field names.
-  const naming = options?.naming ?? (source === null ? "camelCase" : "snake_case");
+  const naming = own(options, "naming") ?? (source === null ? "camelCase" : "snake_case");
   const tables = tablesOf(label, declared, naming, keyless === false, source === null);
 
   class Base {
@@ -614,11 +615,11 @@ function defineSchema(
     }
   }
   const base = Base as unknown as AnySchema;
-  const codegen = options?.codegen !== false;
+  const codegen = own(options, "codegen") !== false;
   // The builders `changeset.validate()` uses, for the same reason as the row factory.
   if (codegen) generatedBuilders(tables.fieldsByName);
   else refuseGeneration(tables.fieldsByName);
-  const own = makeMeta(
+  const metadata = makeMeta(
     {
       ...tables,
       source,
@@ -632,11 +633,11 @@ function defineSchema(
     base,
     label,
   );
-  Object.defineProperty(base, META, { value: own });
+  Object.defineProperty(base, META, { value: metadata });
   Object.defineProperties(Base.prototype, {
     toJSON: { value: rowToJSON, writable: true, configurable: true },
     [INSPECT]: { value: rowInspect, writable: true, configurable: true },
-    [MODEL]: { value: own },
+    [MODEL]: { value: metadata },
   });
   return base;
 }

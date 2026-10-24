@@ -4,6 +4,7 @@
  * @module
  */
 import { MigrationError } from "../errors.js";
+import { own } from "../internal/own.js";
 import type { MigrationBuilder } from "./builder.js";
 
 /** Marks a value made by {@link defineMigration} (`Symbol.for`, so two copies of the package agree). */
@@ -67,7 +68,7 @@ const KEYS = ["up", "down", "transaction"];
 export function missingSteps(value: object): ("up" | "down")[] {
   const missing: ("up" | "down")[] = [];
   for (const key of ["up", "down"] as const) {
-    if (typeof (value as Record<string, unknown>)[key] !== "function") missing.push(key);
+    if (typeof own(value as Record<string, unknown>, key) !== "function") missing.push(key);
   }
   return missing;
 }
@@ -130,11 +131,16 @@ export function defineMigration(definition: MigrationDefinition): Migration {
       "defineMigration() takes an object: defineMigration({ up(m) { … }, down(m) { … } }).",
     );
   }
-  const { up, down, transaction } = definition as {
+  // The definition is read like options: own properties only, so a key planted on
+  // Object.prototype is never a step or a setting.
+  const given = definition as {
     readonly up?: unknown;
     readonly down?: unknown;
     readonly transaction?: unknown;
   };
+  const up = own(given, "up");
+  const down = own(given, "down");
+  const transaction = own(given, "transaction");
   for (const [key, value] of [
     ["up", up],
     ["down", down],
@@ -143,7 +149,7 @@ export function defineMigration(definition: MigrationDefinition): Migration {
       throw new TypeError(`defineMigration(): ${key} must be a function.`);
     }
   }
-  const hasChange = "change" in definition;
+  const hasChange = Object.hasOwn(definition, "change");
   const missing = missingSteps(definition);
   if (missing.length > 0) {
     throw missingStepsError("defineMigration() was given", missing, hasChange);

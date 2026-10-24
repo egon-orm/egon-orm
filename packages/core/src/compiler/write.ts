@@ -23,8 +23,10 @@ import type {
   OnConflict,
   OutputPlan,
 } from "../contracts/adapter.js";
+import type { FragmentNode } from "../contracts/query.js";
 import type { FieldMeta, SchemaMeta } from "../contracts/schema.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { quoteIdentifier, unsupported } from "./dialect.js";
 import { type EmitContext, emitLooseExpr, emitLooseQuery, inlineValue, namedValue } from "./emit.js";
 import { resolveTableSchema } from "./plan.js";
@@ -208,11 +210,12 @@ export function emitInsert(
     default:
       throw new QueryError("query.astInsertSource", "An insert's source is values, cells or a query.");
   }
-  if (options.onConflict !== undefined) {
+  const conflict = own(options, "onConflict");
+  if (conflict !== undefined) {
     sql +=
       ctx.dialect.upsert === "onDuplicateKey"
-        ? onDuplicateKey(ctx, meta, columns, options.onConflict, source.kind === "query")
-        : onConflict(ctx, meta, columns, options.onConflict, schema);
+        ? onDuplicateKey(ctx, meta, columns, conflict, source.kind === "query")
+        : onConflict(ctx, meta, columns, conflict, schema);
   }
   const back = returning(ctx, meta, options.returning);
   return { sql: sql + back.sql, output: back.output, schema: target.schema };
@@ -327,7 +330,8 @@ function onConflict(
     throw new QueryError("query.onConflictShape", 'onConflict is "nothing" or { target, update }.');
   }
   let text = " on conflict";
-  if (conflict.target === undefined) {
+  const target = own(conflict, "target");
+  if (target === undefined) {
     if (ctx.dialect.conflictUpdateNeedsTarget) {
       throw new QueryError(
         "query.onConflictTarget",
@@ -336,9 +340,9 @@ function onConflict(
     }
   } else {
     if (!ctx.dialect.capabilities.conflictTarget) throw unsupported(ctx.dialect, "An onConflict target");
-    text += conflictTarget(ctx, meta, conflict.target, schema);
+    text += conflictTarget(ctx, meta, target, schema);
   }
-  const fields = updatedFields(meta, columns, conflict.update);
+  const fields = updatedFields(meta, columns, own(conflict, "update") as ConflictUpdate);
   if (fields.length === 0) {
     throw new QueryError("query.onConflictNoUpdate", "onConflict's update leaves no column to update.");
   }
@@ -385,11 +389,11 @@ function onDuplicateKey(
   if (typeof conflict !== "object" || conflict === null) {
     throw new QueryError("query.onConflictShape", 'onConflict is "nothing" or { target, update }.');
   }
-  if (conflict.target !== undefined && !ctx.dialect.capabilities.conflictTarget) {
+  if (own(conflict, "target") !== undefined && !ctx.dialect.capabilities.conflictTarget) {
     throw unsupported(ctx.dialect, "An onConflict target");
   }
   if (fromQuery) throw unsupported(ctx.dialect, "onConflict with update on an insert from a query");
-  const fields = updatedFields(meta, columns, conflict.update);
+  const fields = updatedFields(meta, columns, own(conflict, "update") as ConflictUpdate);
   if (fields.length === 0) {
     throw new QueryError("query.onConflictNoUpdate", "onConflict's update leaves no column to update.");
   }
@@ -422,12 +426,14 @@ function conflictTarget(
     return ` (${columnList(ctx, fields)})`;
   }
   const node = target as Exclude<ConflictTarget, readonly FieldMeta[]>;
-  if ("kind" in node && node.kind === "fragment") return ` ${emitLooseExpr(ctx, node, schema)}`;
-  if ("constraint" in node && typeof node.constraint === "string" && node.constraint !== "") {
+  if (Object.hasOwn(node, "kind") && (node as FragmentNode).kind === "fragment")
+    return ` ${emitLooseExpr(ctx, node as FragmentNode, schema)}`;
+  const constraint = own(node as { readonly constraint?: unknown }, "constraint");
+  if (typeof constraint === "string" && constraint !== "") {
     if (!ctx.dialect.capabilities.conflictConstraint) {
       throw unsupported(ctx.dialect, "An onConflict target that names a constraint ({ constraint })");
     }
-    return ` on constraint ${quoteIdentifier(ctx.dialect, node.constraint)}`;
+    return ` on constraint ${quoteIdentifier(ctx.dialect, constraint)}`;
   }
   throw new QueryError(
     "query.onConflictTargetShape",
@@ -446,7 +452,7 @@ function updatedFields(
     checkFields(meta, fields, "onConflict's update list");
     return fields;
   }
-  const except = (update as { readonly except?: unknown }).except;
+  const except = own(update as { readonly except?: unknown }, "except");
   if (!Array.isArray(except))
     throw new QueryError(
       "query.onConflictUpdate",

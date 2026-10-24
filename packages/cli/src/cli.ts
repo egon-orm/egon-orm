@@ -16,9 +16,10 @@ import {
   type MigrationStatus,
   type Migrator,
 } from "egon-orm/migration";
-import { CliError, type EgonConfig, type LoadedConfig, loadConfig } from "./config.js";
+import { CliError, type EgonConfig, type LoadedConfig, loadConfig, type MigrationsConfig } from "./config.js";
 import { MAX_NAME_LENGTH, MIGRATION_NAME, migrationTemplate, versionAt } from "./create.js";
 import { COMMAND_HELP, MAIN_HELP } from "./help.js";
+import { own } from "./own.js";
 import { VERSION } from "./version.js";
 
 /**
@@ -105,6 +106,11 @@ function atMostOne(values: Values, flags: readonly string[]): void {
  * ```
  */
 export async function run(argv: readonly string[], io: CliIo = processIo()): Promise<number> {
+  return runWith(argv, ioOf(io));
+}
+
+/** {@link run}, with the caller's `io` read as own properties. */
+async function runWith(argv: readonly string[], io: CliIo): Promise<number> {
   const [first, ...rest] = argv;
   const json = rest.includes("--json");
   try {
@@ -176,6 +182,25 @@ function report(io: CliIo, json: boolean, error: unknown): void {
   }
 }
 
+/**
+ * The caller's `io`, read as own properties only: a member planted on Object.prototype is
+ * not used in place of one the caller left out.
+ */
+function ioOf(given: CliIo): CliIo {
+  return {
+    stdout: own(given, "stdout") as CliIo["stdout"],
+    stderr: own(given, "stderr") as CliIo["stderr"],
+    cwd: own(given, "cwd") as string,
+    env: own(given, "env") as CliIo["env"],
+    now: own(given, "now") as CliIo["now"],
+  };
+}
+
+/** No migrations settings: no prototype, so a key planted on Object.prototype is no setting. */
+const NO_MIGRATIONS: MigrationsConfig = /* @__PURE__ */ Object.freeze(
+  /* @__PURE__ */ Object.create(null) as MigrationsConfig,
+);
+
 function processIo(): CliIo {
   return {
     stdout: (text) => {
@@ -211,7 +236,7 @@ async function withConfig<T>(
 }
 
 function migratorFor(loaded: LoadedConfig, log: ((event: MigrationEvent) => void) | undefined): Migrator {
-  const { migrations: list, directory, ...options } = loaded.config.migrations ?? {};
+  const { migrations: list, directory, ...options } = loaded.config.migrations ?? NO_MIGRATIONS;
   return createMigrator({
     ...options,
     adapter: loaded.config.adapter,
@@ -430,7 +455,7 @@ async function db(args: readonly string[], io: CliIo): Promise<number> {
   if (action === undefined || !["create", "drop", "reset"].includes(action) || extra.length > 0) {
     throw new UsageError(`db takes one of create, drop and reset.\n\n${COMMAND_HELP.db}`);
   }
-  if (io.env.NODE_ENV === "production" && values.force !== true) {
+  if (own(io.env, "NODE_ENV") === "production" && values.force !== true) {
     throw new CliError(
       `Refusing to run "egon db ${action}" with NODE_ENV=production: it ${action === "create" ? "creates" : "destroys"} a whole database. Pass --force if you mean it.`,
     );

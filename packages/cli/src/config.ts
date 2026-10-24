@@ -9,6 +9,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { Adapter } from "egon-orm";
 import type { MigrationSource, MigratorOptions } from "egon-orm/migration";
+import { own } from "./own.js";
 
 /**
  * Where the migrations are and how they are tracked: the options of `createMigrator`
@@ -214,15 +215,34 @@ export async function loadConfig(
     }
   }
   const module = await importUserModule(file, load);
-  const config = (module.default ?? module.config) as Partial<EgonConfig> | undefined;
-  if (typeof config !== "object" || config === null || !isAdapter(config.adapter)) {
+  // Every read is of an own property: a key planted on Object.prototype is no setting.
+  const exported = own(module, "default") ?? own(module, "config");
+  const config =
+    typeof exported === "object" && exported !== null ? (exported as Partial<EgonConfig>) : undefined;
+  const adapter = own(config, "adapter");
+  if (config === undefined || !isAdapter(adapter)) {
     throw new CliError(
       `The config file "${file}" must export (as default, or as "config") an object with an adapter: defineConfig({ adapter: postgres({ … }) }).`,
     );
   }
-  const database = config.database;
-  if (database !== undefined && (typeof database.name !== "string" || !isAdapter(database.admin))) {
+  const database = own(config, "database");
+  const name = own(database, "name");
+  const admin = own(database, "admin");
+  if (database !== undefined && (typeof name !== "string" || !isAdapter(admin))) {
     throw new CliError(`The config file "${file}": database must be { name: string, admin: an adapter }.`);
   }
-  return { config: config as EgonConfig, file, root: dirname(file) };
+  const migrations = own(config, "migrations");
+  // The CLI reads the copy, which has no prototype: a setting the file leaves out reads as
+  // undefined whatever Object.prototype holds.
+  const loaded: { -readonly [K in keyof EgonConfig]: EgonConfig[K] } = Object.create(null);
+  loaded.adapter = adapter;
+  if (database !== undefined)
+    loaded.database = withoutPrototype({ name, admin } as EgonConfig["database"] & object);
+  if (migrations !== undefined) loaded.migrations = withoutPrototype(migrations);
+  return { config: loaded, file, root: dirname(file) };
+}
+
+/** A copy of `value`'s own enumerable properties in an object without a prototype. */
+function withoutPrototype<T extends object>(value: T): T {
+  return Object.assign(Object.create(null) as T, value);
 }

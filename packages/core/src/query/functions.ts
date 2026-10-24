@@ -10,6 +10,7 @@ import type { AggregateNode, ExprNode, NamedParamNode, OrderNode } from "../cont
 import type { FieldBuilder, FieldFlags } from "../contracts/schema.js";
 import type { AnyFieldType } from "../contracts/type.js";
 import { QueryError } from "../errors.js";
+import { own } from "../internal/own.js";
 import { fieldState } from "../schema/field.js";
 import {
   arrayType,
@@ -309,15 +310,17 @@ function windowOf(window: string | WindowSpec | undefined): AggregateNode["over"
     );
   }
   const partitionBy: ExprNode[] = [];
-  for (const item of window.partitionBy ?? NONE) partitionBy.push(expressionArgument(item, "over").node);
+  for (const item of own(window, "partitionBy") ?? NONE)
+    partitionBy.push(expressionArgument(item, "over").node);
   const orderBy: OrderNode[] = [];
-  for (const item of window.orderBy ?? NONE) {
+  for (const item of own(window, "orderBy") ?? NONE) {
     if (item instanceof OrderExpr) orderBy.push(item.node);
     else orderBy.push(orderNode(expressionArgument(item, "over").node, "asc", undefined));
   }
   let frame: ExprNode | undefined;
-  if (window.frame !== undefined) {
-    frame = expressionArgument(window.frame, "over").node;
+  const given = own(window, "frame");
+  if (given !== undefined) {
+    frame = expressionArgument(given, "over").node;
     if (frame.kind !== "fragment") {
       throw new QueryError("query.overFrame", "over(): frame is a fragment.");
     }
