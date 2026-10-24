@@ -12,7 +12,8 @@ from a status note or a CI log says so.
 ## 1. Summary and recommendation
 
 **Recommendation: publish `0.1.0` once the owner has done the release settings in §9 (items
-O1 to O6), and after one small packaging fix (raise the Zod peer floor, issue P1).** No code
+O1 to O6), has decided the 50 ms budget (P2) and accepted the sampled query and compiler
+survivors (P6), and after one small packaging fix (raise the Zod peer floor, P1).** No code
 blocker was found. Nothing found is data loss, an injection path or a security hole in
 Egon's own code.
 
@@ -44,19 +45,24 @@ What must happen before the first publish (§9, §10):
    cap for embedded lists (`packages/zod/src/to-zod.ts:226`). The repository's own Zod pins
    are 4.6.5. Fix: peer floor `^4.6.6`, pins to 4.6.7 (both releases are 12 or more days
    old). This is a public peer-range change, so it is listed for the owner's decision.
-3. **P11 (Medium): the 50 ms per-expression budget is not met, and only the completions miss
-   was accepted.** The first expression checked in the 200-schema project takes 53–55 ms (I
-   measured 55.2 ms, median of 3; the reviewer of this report 53–55 ms); every other one is
+3. **P2 (Medium): the 50 ms per-expression budget is not met, and only the completions miss
+   was accepted.** The first expression checked in the 200-schema project takes 53–55 ms
+   (55.2 ms, median of 3, in my run; 53.2 ms in one reviewer run); every other one is
    at most about 29 ms. Type health stays a `0.1.0` gate (owner, 2026-10-22), so the owner
    must decide: accept the miss for `0.1.0`, or define the budget so that it excludes the
-   one-time cost of the first expression a program checks (§4.2, §10).
+   one-time cost of the first expression a program checks (§4.2, §10 item 3).
+4. **P6: accept the sampled query and compiler survivors.** Owner decision 4 (2026-10-23)
+   made only the changeset survivors a gate; the query and compiler survivors were sampled,
+   not triaged one by one, and `0.1.0` ships that way (about 106 and 35 untested behaviours
+   estimated). The owner accepts that explicitly before publishing (§4.3, §10 item 4).
 
 Should be done before `0.1.0`, not blocking: say "tested on 16" next to "Postgres 14 or later"
-everywhere it is claimed, or add a Postgres 14 job (P2); update the "under construction,
-nothing is published" wording at release (P10).
+everywhere it is claimed, or add a Postgres 14 job (P3); update the "under construction,
+nothing is published" wording at release (P11).
 
 Not met and accepted by the owner: the 200 ms completions budget on large connected models
-(§4.2). Not met and **not** accepted yet: the 50 ms budget for the first expression (item 3). Not run: step 19 and every box deferred to it; **the published benchmark has not
+(§4.2). Not met and **not** accepted yet: the 50 ms budget for the first expression (item 3). Still to be accepted: the sampled query
+and compiler survivors (item 4). Not run: step 19 and every box deferred to it; **the published benchmark has not
 run.**
 
 ## 2. What I ran
@@ -69,7 +75,7 @@ run.**
 | `pnpm lint:packages` | **pass**: publint `--strict` "All good!" for all six packages; attw `esm-only` green for `node16 (from ESM)` and `bundler` on every entry point (the `node16 (from CJS)` warning is ignored by the profile, as documented) | `lintpkg.log` |
 | `pnpm smoke` | **pass**: ESM, `require()` of the ES modules, and the consumer matrix from packed packages (nodenext, node16, bundler, CommonJS `.cts`, `json-return`) on TypeScript 6.0.3 | `smoke.log` |
 | `node require-esm.cjs`, `node esm.mjs` in `examples/smoke` with **Node 22.12.0** | **pass** (rc 0). Node 22.12.0 prints `ExperimentalWarning: … loading ES Module … using require()`; see P12 | |
-| `pnpm docs:build` | **pass**, 35 s, with Vite's "(!) Some chunks are larger than 500 kB" warning (P8) | `docsbuild.log` |
+| `pnpm docs:build` | **pass**, 35 s, with Vite's "(!) Some chunks are larger than 500 kB" warning (P9) | `docsbuild.log` |
 | `EGON_TEST_TIER2=1 pnpm test:integration --maxWorkers=2` | **pass**: 51 files; 1,801 passed, 2 expected failures (`test.fails` in `core/test/support/db.itest.ts:82` and `mysql.itest.ts:29`, which check the timeout guard), 55 skipped (38 SQLite, 16 MySQL, 1 Postgres), every skip a capability or profile skip (`[capability cancel is false]` 9, `[capability multipleConnections is false]` 9, `arrays` 4, `nonFiniteFloats` 4, …; the Postgres one is "the database begins a transaction with one statement") | `itest.log`, `itest-verbose.log` |
 | `pnpm test:soak` (2 minutes, the documented default) | see §4.4 | `soak.log` |
 | `pnpm audit --prod`, `pnpm audit`, `pnpm audit --json` | see §4.7 | `audit-*.log` |
@@ -95,15 +101,15 @@ Not run, by the rules of this part: a full Stryker area run, any benchmark, the
 | Changesets and validators (05, 06, 15) | **Ready** | §6; changeset mutation survivors triaged one by one ([#74](https://github.com/egon-orm/egon-orm/pull/74)), score 88.14%; duplicate names and own-key reads fixed ([#75](https://github.com/egon-orm/egon-orm/pull/75)) |
 | Query builder and expressions (07–09) | **Ready with caveats** | §6; mutation 83.46%; survivors sampled, not triaged one by one (owner decision 4, 2026-10-23): about 106 (42–237) untested estimated (§4.3) |
 | SQL compiler (10) | **Ready with caveats** | §6; injection property on all three dialects (10,000 runs in CI, 100,000 once in 21-security); mutation 93.04%; survivors sampled, not triaged (owner decision 4): about 35 (14–78) estimated gaps |
-| Adapter, repo reads and writes (11–13) | **Ready with caveats** | §6; my integration run; Postgres 14 claimed but untested (P2); the "global teardown" leak box is false as worded (P9), covered in practice by fault injection and the soak |
+| Adapter, repo reads and writes (11–13) | **Ready with caveats** | §6; my integration run; Postgres 14 claimed but untested (P3); the "global teardown" leak box is false as worded (P10), covered in practice by fault injection and the soak |
 | Associations, transactions, Batch (14, 16) | **Ready** | §6; seams tests (`packages/postgres/test/seams.itest.ts`) in my integration run |
 | Dialects: SQLite, MySQL (17) | **Ready with caveats** | §6; tier-2 integration passes; "CI jobs required" is false (no branch protection, P0) |
 | Migrations and CLI (18) | **Ready** | §6; CLI built-binary tests pass in my integration run |
-| Documentation (20) | **Ready with caveats** | §6; the build has a chunk-size warning, so "zero warnings" is false (P8); the fresh-eyes box rests on the status note (unverified) |
+| Documentation (20) | **Ready with caveats** | §6; the build has a chunk-size warning, so "zero warnings" is false (P9); the fresh-eyes box rests on the status note (unverified) |
 | Edge readiness, JSON responses (21a, 21b) | **Ready** | §6: every box verified, six with low caveats |
 | Security (21 §2) | **Ready with caveats** | F4 open by owner decision (1.0 gate); P1 (Zod peer) |
 | Robustness (21 §3) | **Ready** | §4.4 |
-| Type health (21 §1) | **Not ready** until the owner decides P11 | completions budget not met at about 140–170 connected schemas, accepted by the owner; 50 ms budget missed by the first expression (53–55 ms), not accepted (§4.2) |
+| Type health (21 §1) | **Not ready** until the owner decides P2 | completions budget not met at about 140–170 connected schemas, accepted by the owner; 50 ms budget missed by the first expression (53–55 ms), not accepted (§4.2) |
 | API surface (21 §1) | **Ready** | API report committed, `api:check` in CI's `build+publint+attw` job; owner items 1–9 built ([#72](https://github.com/egon-orm/egon-orm/pull/72)) |
 | Packaging and release mechanics (21 §4) | **Ready** | publint, attw, smoke, peer bounds jobs, dry run from a clean clone |
 | Release settings and repository governance | **Not ready** (owner) | §4.9: none of O1–O6 done; owner: the project owner; proposed issue in §10 |
@@ -155,9 +161,9 @@ callback of the 200-schema project):
 - **50 ms per query expression: not met, and not accepted.** Every expression is under
   50 ms except the first one a program checks, a one-time cost of resolving the library's
   types: I measured 55.2 ms (max 56.4) at `queries-00.ts:4` in the 200-schema tree (21-api
-  recorded 54–63 ms; the reviewer of this report measured 53–55 ms); the next slowest is
+  recorded 54–63 ms; one reviewer run of this report measured 53.2 ms); the next slowest is
   21.8 ms. The owner kept type health as a `0.1.0` gate and accepted only the completions
-  miss, so this is an **unmet `0.1.0` gate** that needs the owner's decision (P11, §10).
+  miss, so this is an **unmet `0.1.0` gate** that needs the owner's decision (P2, §10).
   `examples/blog`: slowest 31.4 ms (`src/accounts.ts:16`).
 - **Instantiation counts** (I measured; identical to 21-api's): `examples/blog` 48,563
   instantiations, 14,730 types, check 0.19 s; 200-schema tree 401,512 instantiations, 59,175
@@ -244,7 +250,7 @@ the own-read audit was done by reading, with no lint to enforce it (a gap it sta
   - **Does it matter?** Not for `0.1.0`: the job is `continue-on-error: true` and outside
     the `ci` gate by design, 7.1 is an unreleased nightly, and 5.8.3, 6.0.3 and 7.0.2 all
     pass. It matters before TypeScript 7.1 ships: re-check at 7.1 beta and fix
-    `ErrorTreeOf` / `errorMessages()` if it persists (P6).
+    `ErrorTreeOf` / `errorMessages()` if it persists (P7).
 - **Support policy** (owner, 2026-10-22): no backports before 1.0; after 1.0 the previous
   major gets security fixes for six months; databases supported until at least their end of
   life. Not provisional: `docs/site/reference/upgrading.md` and `SECURITY.md` "Supported
@@ -370,7 +376,7 @@ The PRs behind it: [#57](https://github.com/egon-orm/egon-orm/pull/57) (21a), [#
   connected schemas (I measured 230–239 ms at 200, 189 ms at 150), and the first expression a
   program checks takes 53–55 ms, over the 50 ms budget. Instantiation counts are recorded. The
   owner accepted the completions gate as not met for `0.1.0` (2026-10-22), with the fix on the
-  roadmap; the 50 ms miss is not accepted yet (P11, §10 item 5a).
+  roadmap; the 50 ms miss is not accepted yet (P2, §10 item 3).
 - [x] **Release dry run succeeds end to end from a clean clone.** I ran it from a fresh
   `git clone` of `origin` at `c2088d6` (§4.8): passed. CI's `release dry run` job passed too.
 - [x] **API report committed and enforced in CI.** `api-report/`, nine entry points;
@@ -423,14 +429,14 @@ The three **false** boxes:
   checked per test (`afterEach`, `checkedOut(poolStats()) === 0`) in the adapter, read and
   transaction conformance suites and `postgres.itest.ts`, but not in the write, preload and
   nested suites. Fault injection and the soak cover the behaviour (§4.4), so this is a test
-  gap (P9), not a known leak.
+  gap (P10), not a known leak.
 - **17.3** "CI jobs added and required": added, but nothing is required (O4).
 - **20.5** "Site builds with zero warnings and deploys from `main`": it deploys, but the build
   prints Vite's chunk-size warning (my `docs:build` and Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469)), and the deploy
-  job prints a `punycode` DEP0040 deprecation warning (P8).
+  job prints a `punycode` DEP0040 deprecation warning (P9).
 
 The two **unverified** boxes: **11.2** Postgres 14 (no CI job, compose or script runs it; the
-status note's run was local) (P2); **20.4** the fresh-eyes test (no transcript in the
+status note's run was local) (P3); **20.4** the fresh-eyes test (no transcript in the
 repository; it cannot be re-run within this part).
 
 ### Step 01: Foundation
@@ -742,16 +748,16 @@ None is data loss, an injection path or a hole in Egon's own code.
 |---|---|---|---|---|---|
 | P0 | **High** (process) | Release settings and repository governance not done: O1–O6 (§4.9). `main` is unprotected (the ruleset targets no branch), so `ci` is not required and any merge method is allowed | **0.1.0** | owner | proposed in §10 |
 | P1 | **Medium** | `@egon-orm/zod` peer `zod: ^4.3.0` admits Zod ≤ 4.6.5 (GHSA-mrhx-c7xc-m3w5, high upstream: memory exhaustion on large arrays); `toZod` emits uncapped `z.array()` for embedded lists (`packages/zod/src/to-zod.ts:226`); the workspace pins 4.6.5 (`packages/zod/package.json:50`, `examples/blog`, `benchmarks`, `docs/site`) | **0.1.0** (recommended) | owner decision (peer range), then 21-packaging's area | proposed in §10 |
-| P11 | Medium | The 50 ms per-expression budget, a `0.1.0` gate, is not met: the first expression a program checks takes 53–55 ms (one-time); the owner accepted only the completions miss (§4.2) | **0.1.0** (owner decision) | owner | §10 item 5a |
-| P2 | Medium | Postgres 14 is the stated minimum (`upgrading.md:87`, `CHANGELOG.md:17`, `guide/adapters.md:35`, `getting-started.md:4` and `:51`, `tutorial.md:62`) but only 16 runs in CI; the same for MySQL 8.0.31 (8.4 in CI). `upgrading.md`'s "Tested in CI" column is honest; the guides do not say it | should before 0.1.0 | owner | proposed in §10 |
-| P3 | Medium | F4: `inspect(error)` shows `detail` and the cause, which may quote a redacted value | 1.0 (owner decision) | owner / core errors | proposed in §10 |
-| P4 | Medium (accepted) | Completions over 200 ms at about 140–170 connected schemas (§4.2) | 1.0 (proposed) | owner / types | roadmap row; proposed issue in §10 |
-| P5 | Low–Medium | Untested logic survivors estimated by sample: query about 106 (42–237), compiler about 35 (14–78) | 1.0 (proposed) | query, compiler | proposed in §10 |
-| P6 | Low | TypeScript `next` (7.1-dev): TS5088 on `export const errors = cs.errorMessages()` with `declaration: true` (ours); TS5115 inside Zod (theirs) | before TS 7.1 ships | changeset types | proposed in §10 |
-| P7 | Low | 44 dev-only advisories (11 high) in vitepress/vite, miniflare/undici/sharp, verdaccio/body-parser, tsup/esbuild, Stryker/qs, fast-uri; none in a published package | no | 21-packaging's area | proposed in §10 |
-| P8 | Low | Docs build not warning-free (Vite chunk-size; the deploy job also prints a `punycode` DEP0040 warning from `actions/deploy-pages`), and nothing fails on a warning; `status/20.md` says "no warnings" | no | docs | proposed in §10 |
-| P9 | Low | Leak assertions missing from the write, preload and nested conformance suites; no global teardown check (box 11.5) | no | core test support | proposed in §10 |
-| P10 | Low | Pre-release wording: "under construction, nothing is published to npm yet" in `README.md:4,25`, `docs/site/index.md:29`, `guide/index.md:4,69`, `reference/roadmap.md:3,16`; and the date of "0.1.0 (unreleased)" in `CHANGELOG.md` | at release | owner / docs | part of the release checklist (§10) |
+| P2 | Medium | The 50 ms per-expression budget, a `0.1.0` gate, is not met: the first expression a program checks takes 53–55 ms (one-time); the owner accepted only the completions miss (§4.2) | **0.1.0** (owner decision) | owner | §10 item 3 |
+| P3 | Medium | Postgres 14 is the stated minimum (`upgrading.md:87`, `CHANGELOG.md:17`, `guide/adapters.md:35`, `getting-started.md:4` and `:51`, `tutorial.md:62`) but only 16 runs in CI; the same for MySQL 8.0.31 (8.4 in CI). `upgrading.md`'s "Tested in CI" column is honest; the guides do not say it | should before 0.1.0 | owner | proposed in §10 |
+| P4 | Medium | F4: `inspect(error)` shows `detail` and the cause, which may quote a redacted value | 1.0 (owner decision) | owner / core errors | proposed in §10 |
+| P5 | Medium (accepted) | Completions over 200 ms at about 140–170 connected schemas (§4.2) | 1.0 (proposed) | owner / types | roadmap row; proposed issue in §10 |
+| P6 | Low–Medium | Untested logic survivors estimated by sample: query about 106 (42–237), compiler about 35 (14–78) | acceptance before **0.1.0** (owner); triage 1.0 (proposed) | owner; query, compiler | §10 item 4 |
+| P7 | Low | TypeScript `next` (7.1-dev): TS5088 on `export const errors = cs.errorMessages()` with `declaration: true` (ours); TS5115 inside Zod (theirs) | before TS 7.1 ships | changeset types | proposed in §10 |
+| P8 | Low | 44 dev-only advisories (11 high) in vitepress/vite, miniflare/undici/sharp, verdaccio/body-parser, tsup/esbuild, Stryker/qs, fast-uri; none in a published package | no | 21-packaging's area | proposed in §10 |
+| P9 | Low | Docs build not warning-free (Vite chunk-size; the deploy job also prints a `punycode` DEP0040 warning from `actions/deploy-pages`), and nothing fails on a warning; `status/20.md` says "no warnings" | no | docs | proposed in §10 |
+| P10 | Low | Leak assertions missing from the write, preload and nested conformance suites; no global teardown check (box 11.5) | no | core test support | proposed in §10 |
+| P11 | Low | Pre-release wording: "under construction, nothing is published to npm yet" in `README.md:4,25`, `docs/site/index.md:29`, `guide/index.md:4,69`, `reference/roadmap.md:3,16`; and the date of "0.1.0 (unreleased)" in `CHANGELOG.md` | at release | owner / docs | part of the release checklist (§10) |
 | P12 | Low | Node 22.12.0 prints `ExperimentalWarning` for `require()` of the ES modules (22.23.1 prints none); not mentioned in the getting-started note on CommonJS | no | docs | proposed in §10 |
 | P13 | Low | Test-strength gaps found while re-verifying (each with evidence in §6): `changeset/sharing.test.ts:101` boundary test does not recurse into `nested/` and `validators/`; the builder immutability test leaves out about a dozen methods (`builder.test.ts:1167-1210`); five preload loading cases have no query count (`preload/index.ts:779,909,939,1115,1132`); `check-docs.mjs` `ENTRY_POINTS` misses `egon-orm/messages` (`scripts/check-docs.mjs:44-53`); about 150 plain `TypeError`/`Error` throws (option checks) have no error identifier; `CliError` is not an `EgonError`; the sandbox is used by the write suite only | no | the owning areas | proposed in §10 (one umbrella issue) |
 | P14 | Info | Naming and typing notes: `ErrorMessagesOf` could now be `ErrorMessages` (freed by [#62](https://github.com/egon-orm/egon-orm/pull/62)); `Json` types floats as `number` though `NaN`/`±Infinity` serialise as `null`; the validator-promise error has id `query.validatorPromise` though it is a changeset error | no | owner (API names) | in §10 |
@@ -766,7 +772,7 @@ Everything here would be checked the same way as this report: re-verified, with 
    to `not.toContain(SECRET)`.
 2. **Editor completions under 200 ms on the 200-schema project** in every connected topology
    (chain, tree, hub), measured with `scripts/type-health/measure.mjs`, and every
-   expression within the 50 ms budget as the owner defines it for `0.1.0` (P11).
+   expression within the 50 ms budget as the owner defines it for `0.1.0` (P2).
 3. **Query and compiler survivors triaged one by one**, as the changeset area was ([#74](https://github.com/egon-orm/egon-orm/pull/74)), with a
    test for every real gap; re-run Stryker on all three areas at the 1.0 candidate, each ≥ 80%
    with no untriaged logic survivor.
@@ -775,7 +781,7 @@ Everything here would be checked the same way as this report: re-verified, with 
    the oldest supported SQLite, Node 22.12.0, TypeScript 5.8, and the peer lower bounds
    (already done for peers and Node).
 6. **TypeScript**: the consumer checks pass on the TypeScript release current at 1.0,
-   including 7.1 if it has shipped (P6 fixed), and the build either moved to TypeScript 7 or
+   including 7.1 if it has shipped (P7 fixed), and the build either moved to TypeScript 7 or
    the decision restated.
 7. **Branch protection enforced** (one approval, `ci` required, squash only) for the whole
    1.0 cycle, and the weekly soak green on GitHub for at least four consecutive weeks.
@@ -783,7 +789,7 @@ Everything here would be checked the same way as this report: re-verified, with 
    and trusted publishing (no `NPM_TOKEN` left).
 9. **No advisory in any published package's dependency tree**, and the dev-only advisories
    with a fixed release taken.
-10. **Docs**: the site builds with zero warnings and fails on one; the leak assertions (P9)
+10. **Docs**: the site builds with zero warnings and fails on one; the leak assertions (P10)
     and the other test gaps of P13 closed; a fresh-eyes run recorded in the repository.
 11. **Support policy in force**: the six-month security window for the previous major
     published in `SECURITY.md` and `upgrading.md` (already written; confirm at 1.0).
@@ -800,19 +806,27 @@ Owner, in the repository settings and on npm (none done today, §4.9):
   create pull requests (and give the version job a token whose PRs start CI).
 - Publish a placeholder for the unscoped `egon-orm` name now, or publish `0.1.0` soon.
 
+Owner decisions (§10 items 3 and 4):
+
+- P2: decide the 50 ms per-expression budget (accept the miss, or exclude the one-time
+  first-expression cost).
+- P6: accept explicitly that `0.1.0` ships with the query and compiler survivors sampled,
+  not triaged.
+
 Before the version PR is merged:
 
 - P1: raise the Zod peer floor to `^4.6.6` and the pins to 4.6.7 (needs the owner's
   approval: it is a peer-range change).
-- P2: say "tested on Postgres 16" wherever "14 or later" is claimed, or add a 14 job.
-- P10: update the "under construction" wording and the changelog date.
+- P3: say "tested on Postgres 16" wherever "14 or later" is claimed, or add a 14 job.
+- P11: update the "under construction" wording and the changelog date.
 
 ## 10. Needs the owner's decision
 
 No GitHub issue exists for any item (the repository has none). Each "not ready" or proposed
-1.0 item below has a proposed issue for the owner to open; I created none.
+1.0 item below has a proposed issue for the owner to open; I created none. Items 1 to 4 are
+needed before `0.1.0` is published.
 
-1. **Release settings (P0, not ready).** Do O1–O6.
+1. **Release settings (P0, not ready; before `0.1.0`).** Do O1–O6.
    - *Proposed issue:* "Release settings for 0.1.0: RELEASE variable, npm environment,
      token, branch protection, vulnerability reporting". *Body:* "Before the first publish
      (status/21-audit.md §4.9): set the repository variable RELEASE=on; create the npm
@@ -823,9 +837,10 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      reporting (SECURITY.md links to it); allow GitHub Actions to create pull requests, and
      give the version job a token whose PRs start CI. Also publish a placeholder for the
      unscoped egon-orm name."
-2. **Zod peer floor (P1).** Recommendation: raise `@egon-orm/zod`'s peer to `zod: ^4.6.6`
-   for `0.1.0` and bump the workspace pins to 4.6.7; mention it in `CHANGELOG.md`. The
-   alternative is to keep `^4.3.0` and document the advisory in `SECURITY.md`.
+2. **Zod peer floor (P1; before `0.1.0`).** Recommendation: raise `@egon-orm/zod`'s peer to
+   `zod: ^4.6.6` for `0.1.0` and bump the workspace pins to 4.6.7; mention it in
+   `CHANGELOG.md`. The alternative is to keep `^4.3.0` and document the advisory in
+   `SECURITY.md`.
    - *Proposed issue:* "@egon-orm/zod: require zod 4.6.6 or later (GHSA-mrhx-c7xc-m3w5)".
      *Body:* "Zod up to 4.6.5 can exhaust memory validating a large array without a length
      constraint. toZod emits z.array() for embedded lists (packages/zod/src/to-zod.ts:226),
@@ -833,7 +848,35 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      exposed. The peer range ^4.3.0 admits those versions, and the workspace pins 4.6.5.
      Raise the peer floor to ^4.6.6, pin 4.6.7, update the peer lower-bound job and
      upgrading.md's table."
-3. **Postgres 14 (P2).** Recommendation: add Postgres 14 to the integration matrix (one
+3. **The 50 ms per-expression budget (P2, not ready; before `0.1.0`).** Type health is a
+   `0.1.0` gate; the first expression a program checks takes 55.2 ms in my run and 53.2 ms in
+   one reviewer run; all others are under 30 ms. Options: (1) accept the miss for `0.1.0`, as
+   with completions; (2) define the budget as excluding the one-time cost of the first
+   expression checked (the cost moves to whichever expression is checked first,
+   `status/21-api.md` §3), which then meets it. Recommendation: (2), since that cost is fixed
+   per program and not a property of any query; record it in `21-release.md`'s owner
+   decisions.
+   - *Proposed issue:* "Type health: decide the 50 ms budget for the first expression a
+     program checks". *Body:* "21-release.md budgets 50 ms of check time per query
+     expression and keeps type health a 0.1.0 gate. The first expression a program checks
+     takes 53–55 ms in the 200-schema project (55.2 ms median of 3 on 2026-10-24,
+     scripts/type-health/measure.mjs --topology tree; status/21-api.md recorded 54–63 ms);
+     every other expression is under 30 ms. It is the one-time cost of resolving the
+     library's types, and moves to whichever expression is checked first. Decide: accept
+     the miss for 0.1.0, or define the budget to exclude that first-expression cost. If the
+     cost is to be lowered, measure what in the library's entry types it resolves."
+4. **Accept the sampled query and compiler survivors (P6; before `0.1.0`).** Owner decision
+   4 (2026-10-23) made only the changeset survivors a `0.1.0` gate; the query and compiler
+   survivors were sampled, not triaged. `0.1.0` ships that way, so the owner should **accept
+   explicitly, before publishing**, that it ships with about 106 (42–237) untested query
+   behaviours and about 35 (14–78) compiler ones, as estimated. Proposal: 1.0 work and a 1.0
+   gate (§8.3).
+   - *Proposed issue:* "Triage every logic mutation survivor in query/ and compiler/".
+     *Body:* "Sampled estimates (status/21-robustness.md §4): about 106 (42–237) untested
+     behaviours in query/, about 35 (14–78) in compiler/. Do what [#74](https://github.com/egon-orm/egon-orm/pull/74) did for changeset/:
+     classify each of the 798 and 264 logic survivors, test each real gap against its
+     hand-applied mutant, and re-run Stryker."
+5. **Postgres 14 (P3).** Recommendation: add Postgres 14 to the integration matrix (one
    compose service, one job in the `ci` gate) before 1.0; for `0.1.0`, have the guides say
    "tested on 16" as `upgrading.md` does. Postgres 14 reaches end of life in November 2026,
    so the floor may move to 15 instead.
@@ -841,21 +884,14 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      8.0.31)". *Body:* "upgrading.md and the guides say Postgres 14 or later and MySQL
      8.0.31 or later; CI runs Postgres 16 and MySQL 8.4 only (docker-compose.yml:15,35).
      Add jobs for the floors, or raise the floors to what is tested."
-4. **F4 (P3), a 1.0 gate by the owner's decision.**
+6. **F4 (P4), a 1.0 gate by the owner's decision.**
    - *Proposed issue:* "Hide detail and the driver cause from util.inspect of
      ConstraintError and DatabaseError (F4, 1.0 gate)". *Body:* "status/21-security.md F4:
      the database's text in error.detail and error.cause can quote a redacted value, and
      util.inspect(error) prints it (pinned by packages/postgres/test/secrets.itest.ts:210).
      Give both errors a custom inspect that leaves out detail and shows the cause as one
      line; keep the properties readable; flip the test."
-5a. **The 50 ms per-expression budget (P11), a `0.1.0` gate.** The first expression a
-   program checks takes 53–55 ms; all others are under 30 ms. Options: (1) accept the miss
-   for `0.1.0`, as with completions; (2) define the budget as excluding the one-time cost of
-   the first expression checked (the cost moves to whichever expression is checked first,
-   `status/21-api.md` §3), which then meets it. Recommendation: (2), since the first-expression
-   cost is fixed per program and not a property of any query; record it in `21-release.md`'s
-   owner decisions.
-5. **Editor completions (P4).** Accepted for `0.1.0`. Proposal: make it a 1.0 gate (§8.2).
+7. **Editor completions (P5).** Accepted for `0.1.0`. Proposal: make it a 1.0 gate (§8.2).
    - *Proposed issue:* "Faster editor completions in large connected models". *Body:*
      "Completions in a where callback cost about 40 ms plus 1.1–1.2 ms per schema reachable
      through associations: 230–239 ms at 200 (chain, tree, hub), 189 ms at 150 (2026-10-24,
@@ -863,46 +899,37 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
      inferring every static member of every reachable schema (status/21-api.md §3). Make
      the association types read declared metadata and expand only where preload is used.
      Workaround in the FAQ."
-6. **Query and compiler survivors (P5).** Owner decision 4 (2026-10-23) made only the
-   changeset survivors a `0.1.0` gate; the query and compiler survivors were sampled, not
-   triaged. Asked: **accept explicitly** that `0.1.0` ships with about 106 (42–237) untested
-   query behaviours and about 35 (14–78) compiler ones, as estimated. Proposal: 1.0 work and a
-   1.0 gate (§8.3).
-   - *Proposed issue:* "Triage every logic mutation survivor in query/ and compiler/".
-     *Body:* "Sampled estimates (status/21-robustness.md §4): about 106 (42–237) untested
-     behaviours in query/, about 35 (14–78) in compiler/. Do what [#74](https://github.com/egon-orm/egon-orm/pull/74) did for changeset/:
-     classify each of the 798 and 264 logic survivors, test each real gap against its
-     hand-applied mutant, and re-run Stryker."
-7. **TypeScript next (P6).**
+8. **TypeScript next (P7).**
    - *Proposed issue:* "errorMessages() result is not serialisable under TypeScript 7.1-dev
      (TS5088)". *Body:* "In the informational CI job, export const errors =
      newUser.errorMessages() (examples/smoke/types/consumer.ts:174) fails with TS5088 under
      declaration: true on 7.1.0-dev. Re-check at 7.1 beta; if it persists, make ErrorTreeOf
      serialisable. TS5115 in the same job is inside Zod 4.6.5's declarations."
-8. **Dev advisories (P7).**
+9. **Dev advisories (P8).**
    - *Proposed issue:* "Take fixed releases of the flagged development tools". *Body:*
      "pnpm audit: 44 advisories, all in development tools (status/21-audit.md §4.7):
      vitepress/vite, miniflare/wrangler (undici, sharp), verdaccio and docs express
      (body-parser), tsup/vite/vitest (esbuild), Stryker (qs), fast-uri. Bump each when a
      release old enough for minimumReleaseAge exists."
-9. **Docs build warning (P8).**
-   - *Proposed issue:* "Make the docs build warning-free and fail on warnings". *Body:*
-     "vitepress build prints Vite's chunk-size warning (Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469)); step 20's
-     acceptance says zero warnings. Split the chunk or set the limit deliberately, then fail
-     the build on any warning."
-10. **Leak assertions (P9).**
+10. **Docs build warning (P9).**
+    - *Proposed issue:* "Make the docs build warning-free and fail on warnings". *Body:*
+      "vitepress build prints Vite's chunk-size warning (Docs run [40123401469](https://github.com/egon-orm/egon-orm/actions/runs/40123401469)), and the
+      deploy job prints a punycode DEP0040 warning from actions/deploy-pages; step 20's
+      acceptance says zero warnings. Split the chunk or set the limit deliberately, then
+      fail the build on any warning."
+11. **Leak assertions (P10).**
     - *Proposed issue:* "Assert no checked-out connection after every conformance suite".
       *Body:* "Step 11's box asks for a global teardown check; global-setup.ts only sweeps
       databases. Add the afterEach check (checkedOut(poolStats()) === 0) to the write,
       preload and nested suites, or a teardown that checks every adapter created."
-11. **Test-strength gaps (P13), one umbrella issue.**
+12. **Test-strength gaps (P13), one umbrella issue.**
     - *Proposed issue:* "Close the test gaps found by the 0.1.0 audit". *Body:* the P13 list
       with its file references.
-12. **Names (P14).** Whether to rename `ErrorMessagesOf` to `ErrorMessages` before `0.1.0`
+13. **Names (P14).** Whether to rename `ErrorMessagesOf` to `ErrorMessages` before `0.1.0`
     (cheaper now than later; recommendation: yes, or keep and say why in the API report), and
     whether the validator-promise error belongs in the `changeset` namespace (an identifier
     change, ADR 0007).
-13. **Node 22.12 warning (P12).** Recommendation: one sentence in getting-started's
+14. **Node 22.12 warning (P12).** Recommendation: one sentence in getting-started's
     CommonJS note that early 22.x releases print an ExperimentalWarning for require() of an ES module.
 
 ## Review round 1 (PR [#76](https://github.com/egon-orm/egon-orm/pull/76))
@@ -914,7 +941,7 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
    as evidence from O4, P0 and the step 17 finding. P0 stands without it: `main` is still
    unprotected.
 2. **The 50 ms budget** is now an unmet `0.1.0` gate that needs the owner's decision (§1 item
-   3, §4.2, P11 Medium, §10 item 5a), not a Low item or a 1.0 aside; type health is "Not ready"
+   3, §4.2, P2 Medium, §10 item 3), not a Low item or a 1.0 aside; type health is "Not ready"
    until it is decided.
 3. Step 10 box 5: the dynamic `node:fs/promises`, `node:path`, `node:url` imports of
    `migration/loader.ts` added to the evidence.
@@ -922,11 +949,24 @@ No GitHub issue exists for any item (the repository has none). Each "not ready" 
 5. Step 01 box 6 (`pnpm bench`): classified from CI (green in `build+publint+attw`) as
    verified with caveat, not "not run (step 19)"; counts updated.
 6. Query and compiler survivors: stated as sampled, not triaged, by owner decision 4 of
-   2026-10-23; their explicit acceptance is asked for in §10 item 6.
+   2026-10-23; their explicit acceptance is asked for in §10 item 4.
 7. Step 20 box 5: the deploy job's `punycode` DEP0040 warning added.
-8. P2: `getting-started.md:4` added.
+8. P3: `getting-started.md:4` added.
 9. §4.7: the `dependencies` field is absent, not empty.
 10. Run IDs and PR numbers are links.
+
+## Review round 2 (PR [#76](https://github.com/egon-orm/egon-orm/pull/76))
+
+1. §1's recommendation line and the §9 checklist now include the 50 ms decision next to
+   O1–O6 and the Zod floor.
+2. The 50 ms item has a proposed issue (§10 item 3).
+3. Accepting the sampled query and compiler survivors is stated as needed before `0.1.0`
+   (§1 item 4, §9, §10 item 4).
+4. The two measurements are given as they were: 55.2 ms (median of 3) in my run, 53.2 ms in
+   one reviewer run.
+5. Renumbered so that the order reads naturally: the issues in §7 are P0 to P15 in rank
+   order (the 50 ms item is now P2, and the old P2 to P10 are P3 to P11), and §10 lists the
+   four items needed before `0.1.0` first. The round 1 note above uses the new numbers.
 
 ## Requests
 
