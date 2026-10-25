@@ -338,15 +338,19 @@ None open. The search-index warning (item 6) was decided on 2026-10-25: option (
     `error-review.itest.ts` 1 (for example `error-review.itest.ts:170`, "Argument of type
     'typeof LooseUser' is not assignable to parameter of type 'Source'");
   - run 40131013070 (node 22, job 120982530038): 1 `TypeCheckError`, at
-    `packages/postgres/test/casts.itest.ts:350:31`, "Expected 2-3 arguments, but got 1" (on
-    `repo.all(...)`, which takes one argument).
+    `packages/postgres/test/casts.itest.ts:350:31`, "Expected 2-3 arguments, but got 1", on
+    `repo.all(query)`. `all<Q>(queryable, ...args: ReadArgs<Q, ReadOptions>)` takes
+    `[options?]` after a query without named parameters and `[params, options?]` after one
+    with them. That query has none, so passing it alone is right; the error means that in
+    that run the checker typed the query as having named parameters.
 
   The likely cause of the first is that every `*:types` project runs `tsc --build` at the
   same time (`vitest.config.ts`, `typecheck.build: true`), so one project can type-check
   against another package's declarations while they are being rebuilt. The second fits the
-  same picture: a postgres test that sees a different signature for a core function than the
-  source has, and passes on re-run. But it is a single error, and I have not shown it is the
-  same race; it could be something else, such as a stale incremental build. For whoever owns the
+  same picture: a postgres test whose query type, built from core's declarations, came out
+  wrong in one run (with named parameters it does not have) and right on re-run. But it is a
+  single error, and I have not shown it is the same race; it could be something else, such as
+  a stale incremental build. For whoever owns the
   test tooling.
 
 ## Not verified
@@ -453,3 +457,10 @@ and (c).
    written as an action ("check what cannot be exercised before a real publish: ...").
 3. "Checks" names the commit of each local run and the CI runs. The last CI run on the code
    is 40235209676 at `f44fe70`, green, and the commits after it touch only status notes.
+
+## Review round 6 (PR #77, changes requested)
+
+1. The flake entry no longer says `repo.all` takes one argument or that a core function had
+   a different signature. `all` takes `[options?]` or `[params, options?]` after the query,
+   by whether the query has named parameters; the node 22 error means that run typed the
+   query at `casts.itest.ts:350` as having named parameters.
