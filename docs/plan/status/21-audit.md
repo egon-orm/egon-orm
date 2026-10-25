@@ -779,7 +779,7 @@ None is data loss, an injection path or a hole in Egon's own code.
 | P0 | **High** (process) | Release settings and repository governance not done: O1–O6 (§4.9). `main` is unprotected (the ruleset targets no branch), so `ci` is not required and any merge method is allowed | **0.1.0** | owner | §10 list |
 | P1 | **Medium** | `@egon-orm/zod` peer `zod: ^4.3.0` admits Zod ≤ 4.6.5 (GHSA-mrhx-c7xc-m3w5, high upstream: memory exhaustion on large arrays); `toZod` emits uncapped `z.array()` for embedded lists (`packages/zod/src/to-zod.ts:226`); the workspace pins 4.6.5 (`packages/zod/package.json:50`, `examples/blog`, `benchmarks`, `docs/site`) | **0.1.0** (recommended) | owner decision (peer range), then 21-packaging's area | §10 list; **addressed by #77** (`status/21-release-fixes.md` §1) |
 | P2 | Medium | The 50 ms per-expression budget, a `0.1.0` gate, is not met: the first expression a program checks takes 53–55 ms (one-time); the owner accepted only the completions miss (§4.2) | **0.1.0** (owner decision) | owner | §10 item 3; **addressed by #77** (`status/21-release-fixes.md` §4) |
-| P3 | Medium | Postgres 14 is the stated minimum (`upgrading.md:87`, `CHANGELOG.md:17`, `guide/adapters.md:35`, `getting-started.md:4` and `:51`, `tutorial.md:62`) but only 16 runs in CI; the same for MySQL 8.0.31 (8.4 in CI). `upgrading.md`'s "Tested in CI" column is honest; the guides do not say it | should before 0.1.0 | owner | §10 list |
+| P3 | Medium | Postgres 14 is the stated minimum (`upgrading.md:87`, `CHANGELOG.md:17`, `guide/adapters.md:35`, `getting-started.md:4` and `:51`, `tutorial.md:62`) but only 16 runs in CI; the same for MySQL 8.0.31 (8.4 in CI). `upgrading.md`'s "Tested in CI" column is honest; the guides do not say it | should before 0.1.0 | owner | §10 list; **addressed by #77** (`status/21-release-fixes.md` §2) |
 | P4 | Medium | F4: `inspect(error)` shows `detail` and the cause, which may quote a redacted value | 1.0 (owner decision) | owner / core errors | §10 list |
 | P5 | Medium (accepted) | Completions over 200 ms at about 140–170 connected schemas (§4.2) | 1.0 (proposed) | owner / types | roadmap row; §10 list |
 | P6 | Low–Medium | Untested logic survivors estimated by sample: query about 106 (42–237), compiler about 35 (14–78) | acceptance before **0.1.0** (owner); triage 1.0 (proposed) | owner; query, compiler | §10 item 4 |
@@ -790,8 +790,8 @@ None is data loss, an injection path or a hole in Egon's own code.
 | P11 | Low | Pre-release wording: "under construction, nothing is published to npm yet" in `README.md:4,25`, `docs/site/index.md:29`, `guide/index.md:4,69`, `reference/roadmap.md:3,16`; and the date of "0.1.0 (unreleased)" in `CHANGELOG.md` | at release | owner / docs | part of the release checklist (§9) |
 | P12 | Low | Node 22.12.0 prints `ExperimentalWarning` for `require()` of the ES modules (22.23.1 prints none); not mentioned in the getting-started note on CommonJS | no | docs | §10 list |
 | P13 | Low | Test-strength gaps found while re-verifying (each with evidence in §6): `changeset/sharing.test.ts:101` boundary test does not recurse into `nested/` and `validators/`; the builder immutability test leaves out about a dozen methods (`builder.test.ts:1167-1210`); five preload loading cases have no query count (`preload/index.ts:779,909,939,1115,1132`); `check-docs.mjs` `ENTRY_POINTS` misses `egon-orm/messages` (`scripts/check-docs.mjs:44-53`); about 150 plain `TypeError`/`Error` throws (option checks) have no error identifier; `CliError` is not an `EgonError`; the sandbox is used by the write suite only | no | the owning areas | §10 list (one entry) |
-| P14 | Info | Naming and typing notes: `ErrorMessagesOf` could now be `ErrorMessages` (freed by [#62](https://github.com/egon-orm/egon-orm/pull/62)); `Json` types floats as `number` though `NaN`/`±Infinity` serialise as `null`; the validator-promise error has id `query.validatorPromise` though it is a changeset error | no | owner (API names) | in §10; **addressed by #77** (`status/21-release-fixes.md` §3) |
-| P15 | Info | Not exercised before a real publish: npm provenance and trusted publishing, the release workflow's jobs on GitHub, the weekly soak workflow | first publish | owner | release checklist |
+| P14 | Info | Naming and typing notes: `ErrorMessagesOf` could now be `ErrorMessages` (freed by [#62](https://github.com/egon-orm/egon-orm/pull/62)); `Json` types floats as `number` though `NaN`/`±Infinity` serialise as `null`; the validator-promise error has id `query.validatorPromise` though it is a changeset error | no | owner (API names) | in §10; **addressed in part by #77** (the `ErrorMessagesOf` → `ErrorMessages` rename, `status/21-release-fixes.md` §3) |
+| P15 | Info | Not exercised before a real publish: npm provenance and trusted publishing, the release workflow's jobs on GitHub, the weekly soak workflow | first publish | owner | release checklist (§9) |
 
 ## 8. Proposed gate for 1.0
 
@@ -849,6 +849,8 @@ Before the version PR is merged:
   approval: it is a peer-range change).
 - P3: say "tested on Postgres 16" wherever "14 or later" is claimed, or add a 14 job.
 - P11: update the "under construction" wording and the changelog date.
+- P15: not exercised before a real publish: npm provenance and trusted publishing, the
+  release workflow's jobs on GitHub, the weekly soak workflow.
 
 ## 10. Needs the owner's decision: the tracked list of open items
 
@@ -908,7 +910,7 @@ needed before `0.1.0` is published.
      behaviours in query/, about 35 (14–78) in compiler/. Do what [#74](https://github.com/egon-orm/egon-orm/pull/74) did for changeset/:
      classify each of the 798 and 264 logic survivors, test each real gap against its
      hand-applied mutant, and re-run Stryker."
-5. **Postgres 14 (P3).** Recommendation: add Postgres 14 to the integration matrix (one
+5. **Postgres 14 (P3).** *Status: addressed by #77 (`status/21-release-fixes.md` §2).* Recommendation: add Postgres 14 to the integration matrix (one
    compose service, one job in the `ci` gate) before 1.0; for `0.1.0`, have the guides say
    "tested on 16" as `upgrading.md` does. Postgres 14 reaches end of life in November 2026,
    so the floor may move to 15 instead.
@@ -957,7 +959,7 @@ needed before `0.1.0` is published.
 12. **Test-strength gaps (P13), one entry.**
     - *Entry:* "Close the test gaps found by the 0.1.0 audit". *Detail:* the P13 list
       with its file references.
-13. **Names (P14).** *Status: addressed by #77 (`status/21-release-fixes.md` §3).* Whether to rename `ErrorMessagesOf` to `ErrorMessages` before `0.1.0`
+13. **Names (P14).** *Status: addressed in part by #77 (the `ErrorMessagesOf` → `ErrorMessages` rename, `status/21-release-fixes.md` §3).* Whether to rename `ErrorMessagesOf` to `ErrorMessages` before `0.1.0`
     (cheaper now than later; recommendation: yes, or keep and say why in the API report), and
     whether the validator-promise error belongs in the `changeset` namespace (an identifier
     change, ADR 0007).

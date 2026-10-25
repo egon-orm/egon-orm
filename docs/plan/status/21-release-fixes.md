@@ -319,9 +319,18 @@ None open. The search-index warning (item 6) was decided on 2026-10-25: option (
 - **MySQL adapter (`packages/mysql/src/driver.ts`):** `stats()` after `close()` reports the
   ended pool's connections as idle (mysql2 does not empty its arrays on `end()`); report
   zeros once the pool has ended. Low; nothing depends on it today.
-- **To 21-audit's report (PR #76):** P1, P3/P4 (database floors), P10 (box 11.5), P14
+- **To 21-audit's report (PR #76):** P1, P3 (database floors), P10 (box 11.5), P14 in part
   (`ErrorMessagesOf`), the 50 ms decision (P2) and P9 (box 20.5, with option (a)) are
   addressed here.
+- **Recurring `*:types` flake, not fixed in this PR.** Two CI runs of this PR failed
+  `pnpm test:types` with about 93 `TypeCheckError`s in `packages/postgres/test` (for
+  example `error-review.itest.ts:170`, "Argument of type 'typeof LooseUser' is not
+  assignable to parameter of type 'Source'", and "Expected 2-3 arguments, but got 1"): run
+  40234073014 attempt 1 (node 24) and run 40131013070 (node 22). Both passed on re-run with
+  no change. The likely cause is that every `*:types` project runs `tsc --build` at the same
+  time (`vitest.config.ts`, `typecheck.build: true`), so one project can type-check
+  against another package's declarations while they are being rebuilt. For whoever owns the
+  test tooling.
 
 ## Not verified
 
@@ -404,3 +413,16 @@ and (c).
    clause citing the owner's decision of 2026-10-25 (no GitHub issues): each "not ready"
    item's owner plus its §10 entry fill the role. The reviewer checked both "not ready" items
    (P0 and P2) have an owner and a §10 entry. `docs/plan/21-release.md` is not edited.
+
+## Review round 4 (PR #77, changes requested)
+
+1. `21-audit.md`: P3 (the database floors) is marked "addressed by #77" in its §7 row and on
+   §10 entry 5, pointing to §2 of this note. The Requests line says P3, not "P3/P4".
+2. `21-audit.md`: P14 now says "addressed in part by #77 (the `ErrorMessagesOf` →
+   `ErrorMessages` rename, §3)"; the validator-promise namespace and the `Json` float note
+   stay open.
+3. `21-audit.md` §9: a P15 line is added to the release checklist, with the content of P15's
+   §7 row (npm provenance and trusted publishing, the release workflow's jobs on GitHub, the
+   weekly soak workflow), and P15's "Tracked in" now says "release checklist (§9)". So the
+   §10 intro (P11 and P15 tracked in §9) holds.
+4. The recurring `*:types` flake is under Requests, reported as not fixed here.
