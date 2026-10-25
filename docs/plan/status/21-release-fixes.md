@@ -279,24 +279,32 @@ adds them.
 
 ## Checks
 
-All on the branch head, locally (Node 22.23.1, pnpm 12.11.2):
+Local runs (Node 22.23.1, pnpm 12.11.2), each with the commit whose tree it ran on. Where a
+run is older than the head, the commits after it do not touch what it checks unless the
+row says so.
 
-| Check | Result |
-|---|---|
-| `pnpm check` | passed: 6,645 unit tests (163 files), 608 type tests, build |
-| `pnpm api:check` | API report up to date for 9 entry points |
-| `pnpm lint:packages` | passed |
-| `pnpm smoke` | passed ("every check passed") |
-| `pnpm docs:build` | passed, no chunk warning (after §6.1) |
-| `EGON_TEST_TIER2=1 pnpm test:integration --maxWorkers=2` | 51 files passed; 1,801 tests passed, 2 expected fail, 55 skipped; leak check passed |
-| the same on Postgres 14.24 / MySQL 8.0.31 | see §2 |
-| `pnpm audit --prod` | No known vulnerabilities found |
+| Check | Commit | Result |
+|---|---|---|
+| `pnpm check` | `ad2ba53` | passed: 6,645 unit tests (163 files), 608 type tests, build |
+| `pnpm docs:build` | `ad2ba53` | passed, no chunk warning (after §6.1) |
+| `pnpm lint` | `f44fe70` | passed |
+| `pnpm api:check` | `049ceb7` | API report up to date for 9 entry points; no package source changed after it |
+| `pnpm lint:packages` | `049ceb7` | passed |
+| `pnpm smoke` | `049ceb7` | passed ("every check passed") |
+| `pnpm audit --prod` | `049ceb7` | No known vulnerabilities found; no dependency changed after it |
+| `EGON_TEST_TIER2=1 pnpm test:integration --maxWorkers=2` | `337042a` | 51 files passed; 1,801 tests passed, 2 expected fail, 55 skipped; leak check passed. Later integration changes (the pair runs' leak check, `4711e91`) were run only for `parallel.itest.ts` and the Postgres transaction conformance (§5); CI ran the whole suite on them. |
+| the same on Postgres 14.24 / MySQL 8.0.31 (containers started with `docker run`) | `337042a` | see §2 |
 
-CI on PR #77 (run 40130483391): every job passed, including the new **integration
-(database floors)**. That job printed `PostgreSQL 14.24` and `8.0.31`, then ran 51 files:
-1,801 passed, 2 expected fail, 55 skipped. The exception is `types (typescript next,
-informational)`, which fails as it does on `main` (P7 of the report) and is outside the
-`ci` gate.
+CI on PR #77:
+
+- The first run, 40130483391, at `049ceb7`: every job passed, including the new
+  **integration (database floors)**. That job printed `PostgreSQL 14.24` and `8.0.31`, then
+  ran 51 files: 1,801 passed, 2 expected fail, 55 skipped.
+- **The last CI run on this note's code: 40235209676, at `f44fe70`, green.** `f44fe70` touches
+  only status notes, so the code it ran is that of `ad2ba53`; the commits after it touch
+  only status notes too.
+- In every run, `types (typescript next, informational)` fails as it does on `main` (P7 of
+  the report). It is outside the `ci` gate.
 
 ## Deviations and decisions
 
@@ -323,13 +331,22 @@ None open. The search-index warning (item 6) was decided on 2026-10-25: option (
   (`ErrorMessagesOf`), the 50 ms decision (P2) and P9 (box 20.5, with option (a)) are
   addressed here.
 - **Recurring `*:types` flake, not fixed in this PR.** Two CI runs of this PR failed
-  `pnpm test:types` with about 93 `TypeCheckError`s in `packages/postgres/test` (for
-  example `error-review.itest.ts:170`, "Argument of type 'typeof LooseUser' is not
-  assignable to parameter of type 'Source'", and "Expected 2-3 arguments, but got 1"): run
-  40234073014 attempt 1 (node 24) and run 40131013070 (node 22). Both passed on re-run with
-  no change. The likely cause is that every `*:types` project runs `tsc --build` at the same
-  time (`vitest.config.ts`, `typecheck.build: true`), so one project can type-check
-  against another package's declarations while they are being rebuilt. For whoever owns the
+  `pnpm test:types`, and both passed on re-run with no change:
+  - run 40234073014 attempt 1 (node 24): 93 `TypeCheckError`s, all in
+    `packages/postgres/test`: `secrets.itest.ts` 36, `postgres-reads.itest.ts` 34,
+    `soak/workload.ts` 14, `seams.itest.ts` 4, `stream-kill.itest.ts` 4,
+    `error-review.itest.ts` 1 (for example `error-review.itest.ts:170`, "Argument of type
+    'typeof LooseUser' is not assignable to parameter of type 'Source'");
+  - run 40131013070 (node 22, job 120982530038): 1 `TypeCheckError`, at
+    `packages/postgres/test/casts.itest.ts:350:31`, "Expected 2-3 arguments, but got 1" (on
+    `repo.all(...)`, which takes one argument).
+
+  The likely cause of the first is that every `*:types` project runs `tsc --build` at the
+  same time (`vitest.config.ts`, `typecheck.build: true`), so one project can type-check
+  against another package's declarations while they are being rebuilt. The second fits the
+  same picture: a postgres test that sees a different signature for a core function than the
+  source has, and passes on re-run. But it is a single error, and I have not shown it is the
+  same race; it could be something else, such as a stale incremental build. For whoever owns the
   test tooling.
 
 ## Not verified
@@ -426,3 +443,13 @@ and (c).
    weekly soak workflow), and P15's "Tracked in" now says "release checklist (§9)". So the
    §10 intro (P11 and P15 tracked in §9) holds.
 4. The recurring `*:types` flake is under Requests, reported as not fixed here.
+
+## Review round 5 (PR #77, changes requested)
+
+1. The flake entry under Requests gives each run its own count and files: 93 errors in six
+   postgres test files on node 24, 1 error in `casts.itest.ts` on node 22. It says the node
+   22 one fits the same race but is not shown to be it.
+2. `21-audit.md` §9: P15 has its own heading, "At and after the first publish:", and is
+   written as an action ("check what cannot be exercised before a real publish: ...").
+3. "Checks" names the commit of each local run and the CI runs. The last CI run on the code
+   is 40235209676 at `f44fe70`, green, and the commits after it touch only status notes.

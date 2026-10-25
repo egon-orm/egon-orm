@@ -849,8 +849,11 @@ Before the version PR is merged:
   approval: it is a peer-range change).
 - P3: say "tested on Postgres 16" wherever "14 or later" is claimed, or add a 14 job.
 - P11: update the "under construction" wording and the changelog date.
-- P15: not exercised before a real publish: npm provenance and trusted publishing, the
-  release workflow's jobs on GitHub, the weekly soak workflow.
+
+At and after the first publish:
+
+- P15: check what cannot be exercised before a real publish: npm provenance and trusted
+  publishing, the release workflow's jobs on GitHub, the weekly soak workflow.
 
 ## 10. Needs the owner's decision: the tracked list of open items
 
