@@ -13,7 +13,7 @@ owner decisions of 2026-10-24 on it ("do the recommended").
 | 3 | `ErrorMessagesOf` → `ErrorMessages` | **Done.** No alias. Source, TSDoc, type tests, docs, examples, API report, CHANGELOG and the upgrade guide's table of renamed exports. |
 | 4 | 50 ms budget without the first query checked | **Done** in `21-release.md` (dated owner-decision note, Work §1, Acceptance) and in `measure.mjs`, which now reports the first query statement on its own and checks the budget on the rest. Re-measured: see §4. |
 | 5 | Global-teardown leak check (box 11.5) | **Done.** The run fails if any test file leaves a connection checked out of an adapter's pool; seen failing with a scratch leak. No leak in the existing suites. The write, preload and nested conformance suites got their per-test check. |
-| 6 | Docs build with no warnings (box 20.5) | **Not done: one warning left, needs your decision (§6).** The messages page chunk (600 kB) is fixed. The remaining warning is the local search index (778 kB minified, 190 kB gzip), one lazily loaded data module that Vite cannot split. I did not raise `chunkSizeWarningLimit`. The DEP0040 warning: `actions/deploy-pages` is already at its newest release (v5.0.1). |
+| 6 | Docs build with no warnings (box 20.5) | **Done, with option (a)** (owner decision, 2026-10-25; §6.1). The messages page chunk (600 kB) is fixed. The local search index (778 kB), one lazily loaded data module that Vite cannot split, is held to a 1,500 kB ceiling of its own by a build plugin, and every other chunk to 500 kB; a chunk over its limit fails the build. `pnpm docs:build` prints no warning. The DEP0040 warning: `actions/deploy-pages` is already at its newest release (v5.0.1). |
 | 7 | 1.0 gate recorded | **Done.** New "1.0 gate" section in `21-release.md` with the report's §8 list, the two new items (completions under 200 ms; query and compiler survivors triaged one by one) marked as owner decisions. |
 
 ## 1. Zod peer floor
@@ -215,7 +215,51 @@ minification" for two chunks:
 - **DEP0040** (`punycode`) is printed by `actions/deploy-pages` in the Docs workflow's
   deploy job, not by our build. The workflow pins v5.0.1 (`368f825`), which is the newest
   release (2026-09-01), so there is no newer version to take.
-- After the fix, `pnpm docs:build` passes and prints only the search-index warning.
+- After the messages fix, `pnpm docs:build` printed only the search-index warning; after
+  §6.1, none.
+
+### 6.1 Option (a): the owner's decision, 2026-10-25
+
+The owner chose (a): exempt only the local search index, and hold every other chunk to 500 kB.
+
+- **The plugin**, `egon-docs-chunk-sizes`, is in `docs/site/.vitepress/config.ts` (`vite.plugins`).
+  In `generateBundle` it measures every JS chunk (`Buffer.byteLength` of the minified code,
+  in kB of 1,000 bytes, as Vite reports) and calls `this.error`, which fails the build, when
+  a chunk is over its limit: `CHUNK_LIMIT_KB = 500` for every chunk, and
+  `SEARCH_INDEX_LIMIT_KB = 1_500` for the search index. It runs in the client and the server
+  build.
+- **How the search-index chunk is identified:** by its facade module, not its file name.
+  VitePress imports the index as `@localSearchIndex<locale>` and its `resolveId` hook
+  returns `/${id}` (`vitepress/dist/node/chunk-*.js`, `LOCAL_SEARCH_INDEX_ID`), so the
+  chunk's `facadeModuleId` is `/@localSearchIndexroot` for this site's one locale. The plugin
+  matches `/^\/@localSearchIndex[^/]*$/`, which covers any later locale. The first failure
+  run below shows the match working: the 778 kB chunk was checked against the
+  search-index limit, not the 500 kB one.
+- **The threshold:** the index was 778 kB on 2026-10-25 (778,301 bytes at this PR's head). 1,500 kB is about
+  twice that, room for the docs to grow by about as much again. Past it, search needs another
+  approach (the report's options (b) and (c)), not a higher number.
+- **Both failure paths, proven locally** (each threshold lowered in a scratch copy of the
+  config, then restored; `vitepress build` exited 1 both times):
+  - search index, with the limit at 700 kB: `[plugin egon-docs-chunk-sizes]
+    assets/chunks/@localSearchIndexroot.C79f33yJ.js is 778.3 kB after minification, over the
+    700 kB limit for the local search index (docs/site/.vitepress/config.ts,
+    egon-docs-chunk-sizes).`
+  - any other chunk, with the limit at 250 kB: `[plugin egon-docs-chunk-sizes]
+    assets/api_reference_egon-orm_classes_CastError.md.B6Pu2dbu.js is 268.3 kB after
+    minification, over the 250 kB limit for a chunk (docs/site/.vitepress/config.ts,
+    egon-docs-chunk-sizes).`
+- After restoring, `pnpm docs:build` passes with no chunk warning. The largest other chunk
+  is about 300 kB, an API page (`EgonError`).
+
+### Checks changed
+
+With the owner's approval (decision of 2026-10-25, "a"), this PR changes one check:
+
+- **`build.chunkSizeWarningLimit` in the docs' Vite config is 1,500 kB**, the search index's
+  ceiling, instead of Vite's default 500 kB. Vite has one limit for every chunk, so silencing
+  its warning for the search index also raises it for every other chunk. **The plugin's
+  500 kB check is what keeps the other chunks covered**, and it is stricter than Vite's own:
+  it fails the build where Vite only warned.
 
 ## 7. The 1.0 gate
 
@@ -236,7 +280,7 @@ All on the branch head, locally (Node 22.23.1, pnpm 12.11.2):
 | `pnpm api:check` | API report up to date for 9 entry points |
 | `pnpm lint:packages` | passed |
 | `pnpm smoke` | passed ("every check passed") |
-| `pnpm docs:build` | passed, but **one warning** (the search index, §6) |
+| `pnpm docs:build` | passed, no chunk warning (after §6.1) |
 | `EGON_TEST_TIER2=1 pnpm test:integration --maxWorkers=2` | 51 files passed; 1,801 tests passed, 2 expected fail, 55 skipped; leak check passed |
 | the same on Postgres 14.24 / MySQL 8.0.31 | see §2 |
 | `pnpm audit --prod` | No known vulnerabilities found |
@@ -261,8 +305,7 @@ informational)`, which fails as it does on `main` (P7 of the report) and is outs
 
 ## Needs the owner's decision
 
-1. **The search-index chunk warning (item 6, §6).** Choose (a), (b) or (c). Until then
-   `pnpm docs:build` prints one warning and box 20.5 stays false.
+None open. The search-index warning (item 6) was decided on 2026-10-25: option (a), §6.1.
 
 ## Requests
 
@@ -270,8 +313,8 @@ informational)`, which fails as it does on `main` (P7 of the report) and is outs
   ended pool's connections as idle (mysql2 does not empty its arrays on `end()`); report
   zeros once the pool has ended. Low; nothing depends on it today.
 - **To 21-audit's report (PR #76):** P1, P3/P4 (database floors), P10 (box 11.5), P14
-  (`ErrorMessagesOf`) and the 50 ms decision (P2) are addressed here; P9 (box 20.5) only in
-  part.
+  (`ErrorMessagesOf`), the 50 ms decision (P2) and P9 (box 20.5, with option (a)) are
+  addressed here.
 
 ## Not verified
 
@@ -303,3 +346,19 @@ The reviewer's four minor findings:
 
 The search-index warning (item 6) is left as it was; the owner is deciding between (a), (b)
 and (c).
+
+## Owner decisions of 2026-10-25
+
+1. **Docs search index: option (a).** Built as §6.1 describes.
+2. **No GitHub issues.** The project does not use GitHub issues. In `status/21-audit.md`
+   (merged from `main` into this branch, #76) §10 is recast from issue drafts into the
+   tracked list of open items, which is the record. Each entry keeps its rank (its P number)
+   and owner (§7), and an item's owner plus its entry in the list fills the role of "an owner
+   and issue". Only wording and labels changed, and no item was dropped or changed:
+   - "Proposed issue" became "Entry", and "Body" became "Detail".
+   - §7's columns "Issue" became "Item" and "Tracked in", and "proposed in §10" became
+     "§10 list".
+   - The §5 acceptance box says the list fills the issue's role. It stays unticked, as the
+     audit left it.
+   - One line was added to the report's owner decisions.
+   - The review-round history at the end of the report was left as written.
