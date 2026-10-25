@@ -2,6 +2,8 @@
 #
 #   pnpm db:up         Postgres only (tier 1)
 #   pnpm db:up:tier2   Postgres + MySQL
+#   pnpm db:up:floors  the oldest supported releases, Postgres 14 and MySQL 8.0.31, on ports
+#                      of their own (run the suites with EGON_PG_PORT=54314 EGON_MYSQL_PORT=33031)
 #   pnpm db:down       stop everything and discard data
 #   pnpm db:reset      db:down, then db:up
 #
@@ -43,6 +45,43 @@ services:
       - /var/lib/mysql
     healthcheck:
       # Checks over TCP: the socket answers before the server is ready for network clients.
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -pegon --silent"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  # The advertised minimums (docs/site/reference/upgrading.md, "Supported versions"), for the
+  # `integration (database floors)` CI job. Exact releases, pinned by digest: a floor that
+  # moved by itself would no longer test the floor.
+  postgres-floor:
+    image: postgres:14.24-alpine@sha256:50fce0c9c54c43d8b02ce16cb9daff75eb94c09c4ee3d41c157852ebd9700c80
+    profiles: ["floors"]
+    environment:
+      POSTGRES_USER: egon
+      POSTGRES_PASSWORD: egon
+      POSTGRES_DB: egon_dev
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off", "-c", "max_connections=200"]
+    ports:
+      - "127.0.0.1:54314:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U egon -d egon_dev"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  mysql-floor:
+    image: mysql:8.0.31@sha256:3d7ae561cf6095f6aca8eb7830e1d14734227b1fb4748092f2be2cfbccf7d614
+    profiles: ["floors"]
+    environment:
+      MYSQL_ROOT_PASSWORD: egon
+      MYSQL_DATABASE: egon_dev
+    ports:
+      - "127.0.0.1:33031:3306"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -pegon --silent"]
       interval: 2s
       timeout: 5s

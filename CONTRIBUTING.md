@@ -36,7 +36,7 @@ protocol and the pull request and review loop that every change follows.
 | `pnpm docs:dev` / `pnpm docs:build` | VitePress site in `docs/site`; both generate the API reference first (`pnpm docs:api`) |
 | `pnpm docs:check` | The documentation checks (part of `pnpm lint`): see [Documentation](#documentation) |
 | `pnpm docs:exports` / `pnpm docs:dialects` | Regenerate `reference/exports.md` / `reference/dialect-support.md` |
-| `pnpm db:up` / `db:down` / `db:reset` | Start / stop / recreate Postgres (`db:up:tier2` adds MySQL) |
+| `pnpm db:up` / `db:down` / `db:reset` | Start / stop / recreate Postgres (`db:up:tier2` adds MySQL; `db:up:floors` starts Postgres 14 and MySQL 8.0.31) |
 | `pnpm changeset` | Add a release note for a change to a published package |
 
 To run one Vitest project or file:
@@ -107,6 +107,19 @@ that has open connections (checked on Postgres and MySQL). A run that is interru
 of a later run finds them stale, or until `pnpm db:reset`. With `createTestDatabase` you call `drop()`
 yourself, in `afterAll`.
 
+Connections are checked at two levels. A suite that makes adapters waits, after each test,
+until every connection that test checked out is back in its pool (`expectAllReturned` from
+`leaks.ts`, or the same check written inline in the adapter, read and transaction suites).
+And the whole run fails if any test file ended with a connection checked out of any
+adapter's pool, or a caller still waiting for one: `leak-check.ts`, a setup file of the
+integration projects, records the pool of every adapter a file started, and the teardown in
+`global-setup.ts` reads the records and names each file that leaked. The nested runs of
+the pair files (`core:parallel-pair`, `core:sandbox-pair`) report to the run that started
+them. Two limits: a test that leaks a connection and then closes its adapter does not reach
+the leak message, because `close()` waits for the connection to come back, so it fails with
+a timeout instead (the test's 30 s, or 60 s in a hook); and a test file that never finishes
+(a crashed worker) writes no record.
+
 The proof that integration files really run concurrently without interfering is the pair
 `parallel-a.pair.ts` / `parallel-b.pair.ts`, which only pass when they overlap in time.
 `parallel.itest.ts` runs them in a nested Vitest process with exactly two workers, so
@@ -118,7 +131,8 @@ Test support (`packages/core/test/support`):
 |---|---|
 | `env.ts` | `connectionSettings(dialect)`, `connectionUrl`, `tier2Enabled` |
 | `db.ts` | `withDatabase`, `createTestDatabase`, `loadFixture`, `uniqueDatabaseName`, `parseDatabaseName` |
-| `sweep.ts`, `global-setup.ts` | `sweepTestDatabases`; the Vitest global setup that sweeps leaked databases |
+| `sweep.ts`, `global-setup.ts` | `sweepTestDatabases`; the Vitest global setup that sweeps leaked databases and fails the run on a leaked connection |
+| `leaks.ts`, `leak-check.ts` | `expectAllReturned(adapter)`; the setup file that records every adapter's pool for the leak check |
 | `truncate.ts` | `truncateAll(db, { except })` |
 | `sql.ts` | `expectSql(compiled).toMatchInlineSnapshot()`, `normalizeSql` |
 | `fixtures/blog.sql` | The reference blog schema (PostgreSQL DDL) |
@@ -131,6 +145,11 @@ Test support (`packages/core/test/support`):
 loopback interface only. Data lives on tmpfs and is discarded when the containers stop. To point the tests elsewhere, set `EGON_PG_HOST`,
 `EGON_PG_PORT`, `EGON_PG_USER`, `EGON_PG_PASSWORD`, `EGON_PG_DATABASE` (and the
 `EGON_MYSQL_*` equivalents). MySQL tests run only with `EGON_TEST_TIER2=1`.
+
+The `floors` profile (`pnpm db:up:floors`) starts the oldest supported releases, Postgres 14
+on **127.0.0.1:54314** and MySQL 8.0.31 on **127.0.0.1:33031**, pinned by digest, for the
+`integration (database floors)` CI job. Run the suites against them with
+`EGON_TEST_TIER2=1 EGON_PG_PORT=54314 EGON_MYSQL_PORT=33031 pnpm test:integration`.
 
 ## Code rules the tools enforce
 

@@ -68,6 +68,18 @@ function apiSidebar(): DefaultTheme.SidebarItem[] {
 
 const base = process.env.DOCS_BASE ?? "/";
 
+/** The limit for every JS chunk of the client build but the search index, Vite's default warning size. */
+const CHUNK_LIMIT_KB = 500;
+/**
+ * The local search index: one module per locale, `@localSearchIndex<locale>`, which VitePress
+ * resolves to `/@localSearchIndex<locale>`, the chunk's facade module. It is the serialized
+ * index of every page searched, a single module that chunking cannot split, loaded only when
+ * the search box first opens. It was 778 kB on 2026-10-25; 1,500 kB leaves room for the docs
+ * to grow by about as much again before the ceiling asks for another way to search.
+ */
+const SEARCH_INDEX_MODULE = /^\/@localSearchIndex[^/]+$/;
+const SEARCH_INDEX_LIMIT_KB = 1_500;
+
 // Step 20 owns the theme and the tooling of this site; the guide pages live under guide/.
 export default defineConfig({
   title: "Egon ORM",
@@ -278,5 +290,38 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     socialLinks: [{ icon: "github", link: "https://github.com/egon-orm/egon-orm" }],
+  },
+  vite: {
+    build: {
+      // Vite's own warning has one limit for every chunk, and the local search index is over
+      // 500 kB, so its limit is set to the search index's ceiling: the plugin below is the
+      // check, and it holds every other chunk to 500 kB (owner decision, 2026-10-25).
+      chunkSizeWarningLimit: SEARCH_INDEX_LIMIT_KB,
+    },
+    plugins: [
+      {
+        name: "egon-docs-chunk-sizes",
+        // The client build only, as Vite's own warning: the server build is not minified, and
+        // its size is not what the limits are about.
+        apply: (_config, env) => !env.isSsrBuild,
+        // Fails the build, instead of warning, on a chunk over its limit.
+        generateBundle(_options, bundle) {
+          for (const output of Object.values(bundle)) {
+            if (output.type !== "chunk") continue;
+            const kb = Buffer.byteLength(output.code) / 1000;
+            const searchIndex =
+              output.facadeModuleId !== null && SEARCH_INDEX_MODULE.test(output.facadeModuleId);
+            const limit = searchIndex ? SEARCH_INDEX_LIMIT_KB : CHUNK_LIMIT_KB;
+            if (kb > limit) {
+              this.error(
+                `${output.fileName} is ${kb.toFixed(1)} kB after minification, over the ${limit} kB limit for ${
+                  searchIndex ? "the local search index" : "a chunk"
+                } (docs/site/.vitepress/config.ts, egon-docs-chunk-sizes).`,
+              );
+            }
+          }
+        },
+      },
+    ],
   },
 });

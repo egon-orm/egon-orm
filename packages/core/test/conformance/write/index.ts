@@ -54,6 +54,7 @@ import {
   truncateAll,
   User,
 } from "../../support/index.js";
+import { expectAllReturned } from "../../support/leaks.js";
 import { ROUND_TRIP_CASES } from "../adapter/values.js";
 import type { MakeWriteAdapterOptions, WriteConformanceProfile } from "./profile.js";
 
@@ -178,7 +179,11 @@ export function runWriteConformance(profile: WriteConformanceProfile): void {
 
     afterEach(async () => {
       await endSandboxes();
-      for (const each of adapters.splice(0)) await each.close();
+      for (const each of adapters.splice(0)) {
+        // Every connection a test checked out must be back by the time it ends.
+        await expectAllReturned(each);
+        await each.close();
+      }
     });
 
     afterAll(async () => {

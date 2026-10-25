@@ -10,9 +10,17 @@
 // - the synthetic 200-schema project of scripts/type-health/generate.mjs;
 //
 // it prints `tsc --extendedDiagnostics` (check time, types, instantiations), the slowest
-// statements from `tsc --generateTrace` (the budget: no query expression over 50 ms), and,
-// for the synthetic project, the time tsserver takes to answer a completion request inside
-// a `where` callback (the budget: under 200 ms).
+// statements from `tsc --generateTrace`, and, for the synthetic project, the time tsserver
+// takes to answer a completion request inside a `where` callback (the budget: under 200 ms).
+//
+// The per-expression budget: no query expression over 50 ms of check time, not counting the
+// first query expression a program checks (owner decision, 2026-10-24,
+// docs/plan/21-release.md). That one also pays the one-time cost of resolving the library's
+// types, which moves to whichever query is checked first, so it is reported on its own
+// (`firstChecked`), and `slowest` and `budget` leave it out. In the synthetic project the
+// queries are in the `queries-NN.ts` files (the `schemas-NN.ts` files only declare schemas);
+// in examples/blog they are in the four application files (accounts, comments, posts,
+// publishing); `db.ts` makes the repo and `schemas.ts` declares the schemas.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -86,13 +94,20 @@ function lineAt(path, pos) {
   return texts.get(path).slice(0, pos).split("\n").length;
 }
 
-/** Check time per statement (`path:line`, the longest event on that line) in one traced run. */
-function tracedRun(project, run) {
+/** The per-expression budget, in milliseconds (see the top of this file). */
+const BUDGET_MS = 50;
+
+/**
+ * Check time per statement (`path:line`, the longest event on that line) in one traced run,
+ * and the query statement checked first (the earliest event in a file `queries` matches).
+ */
+function tracedRun(project, run, queries) {
   const traceDir = join(TEMP, `trace-${project.split("/").pop()}-${run}`);
   rmSync(traceDir, { recursive: true, force: true });
   tsc(project, ["--generateTrace", traceDir]);
   const events = JSON.parse(readFileSync(join(traceDir, "trace.json"), "utf8"));
   const perLine = new Map();
+  let first;
   for (const event of events) {
     if (event.ph !== "X" || event.cat !== "check") continue;
     if (!["checkExpression", "checkVariableDeclaration", "checkDeferredNode"].includes(event.name)) continue;
@@ -101,8 +116,9 @@ function tracedRun(project, run) {
     // A statement's events nest (a declaration contains its expressions): keep the longest.
     const key = `${path}:${lineAt(path, event.args.pos)}`;
     perLine.set(key, Math.max(perLine.get(key) ?? 0, event.dur / 1000));
+    if (queries.test(path) && (first === undefined || event.ts < first.ts)) first = { key, ts: event.ts };
   }
-  return perLine;
+  return { perLine, first: first?.key };
 }
 
 const round = (ms) => Math.round(ms * 10) / 10;
@@ -117,21 +133,53 @@ function summary(times) {
 }
 
 /**
- * The slowest statements of the project's own files. A statement's time is its median
- * over `runs` traced compilations, so that one garbage-collection pause does not make it
- * look slow; its slowest single observation is reported as well.
+ * The slowest statements of the project's own files, after the first query statement
+ * checked (in a file that `queries` matches), which is reported on its own (see the top of
+ * this file). A statement's time is its median over
+ * `runs` traced compilations, so that one garbage-collection pause does not make it look
+ * slow; its slowest single observation is reported as well.
  */
-function slowest(project, count, runs) {
-  const all = Array.from({ length: runs }, (_, run) => tracedRun(project, run));
+function slowest(project, count, runs, queries) {
+  const all = Array.from({ length: runs }, (_, run) => tracedRun(project, run, queries));
+  // The first query statement of each run; the one most runs agree on is left out of the
+  // budget. A run that disagrees is reported (`firstCheckedByRun`) rather than hidden.
+  const firsts = all.map((each) => each.first);
+  const votes = new Map();
+  for (const key of firsts) votes.set(key, (votes.get(key) ?? 0) + 1);
+  const firstKey = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const agreed = firsts.every((key) => key === firstKey);
   const root = `${ROOT.toLowerCase()}/`;
+  const relative = (key) => (key.toLowerCase().startsWith(root) ? key.slice(root.length) : key);
   const rows = [];
-  for (const key of all[0].keys()) {
-    const times = all.map((perLine) => perLine.get(key) ?? 0).sort((a, b) => a - b);
-    const at = key.toLowerCase().startsWith(root) ? key.slice(root.length) : key;
-    rows.push({ at, medianMs: round(times[Math.floor(runs / 2)]), maxMs: round(times[runs - 1]) });
+  let firstChecked;
+  for (const key of all[0].perLine.keys()) {
+    const times = all.map(({ perLine }) => perLine.get(key) ?? 0).sort((a, b) => a - b);
+    const at = relative(key);
+    const row = { at, medianMs: round(times[Math.floor(runs / 2)]), maxMs: round(times[runs - 1]) };
+    if (key === firstKey) firstChecked = row;
+    else rows.push(row);
   }
   rows.sort((a, b) => b.medianMs - a.medianMs);
-  return { statements: rows.length, runs, slowest: rows.slice(0, count) };
+  const slowestMs = rows[0]?.medianMs ?? 0;
+  const slowestIncludingFirst = Math.max(slowestMs, firstChecked?.medianMs ?? 0);
+  return {
+    statements: rows.length + (firstChecked === undefined ? 0 : 1),
+    runs,
+    firstChecked,
+    ...(agreed
+      ? {}
+      : { firstCheckedByRun: firsts.map((key) => (key === undefined ? undefined : relative(key))) }),
+    budget: {
+      limitMs: BUDGET_MS,
+      slowestAfterFirstMs: slowestMs,
+      met: slowestMs <= BUDGET_MS,
+      // The same with the first query statement counted, to show whether the project would
+      // meet the budget without the exclusion.
+      slowestIncludingFirstMs: slowestIncludingFirst,
+      metIncludingFirst: slowestIncludingFirst <= BUDGET_MS,
+    },
+    slowest: rows.slice(0, count),
+  };
 }
 
 /** Completion requests in a `where` callback, through a scripted tsserver session. */
@@ -221,7 +269,10 @@ const results = { typescript: typescriptVersion, node: process.version, projects
 const completionsOnly = process.argv.includes("--completions-only");
 if (!completionsOnly) {
   const blog = blogProject();
-  results.projects["examples/blog"] = { ...diagnostics(blog), ...slowest(blog, 5, RUNS) };
+  results.projects["examples/blog"] = {
+    ...diagnostics(blog),
+    ...slowest(blog, 5, RUNS, /\/src\/(?:accounts|comments|posts|publishing)\.ts$/),
+  };
 }
 const synthetic = join(TEMP, "synthetic");
 const ANNOTATE = process.argv.includes("--annotate-assocs");
@@ -232,7 +283,9 @@ results.projects[
 ] = {
   // The schemas the edited query's schema (S001) reaches through associations, itself included.
   reachableFromEditedSchema: reachable(1, SCHEMAS, TOPOLOGY),
-  ...(completionsOnly ? {} : { ...diagnostics(synthetic), ...slowest(synthetic, 10, RUNS) }),
+  ...(completionsOnly
+    ? {}
+    : { ...diagnostics(synthetic), ...slowest(synthetic, 10, RUNS, /\/queries-\d+\.ts$/) }),
   completionsInWhere: await completions(editorFile, 20),
 };
 process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);

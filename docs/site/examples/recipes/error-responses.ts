@@ -7,7 +7,7 @@ import {
   ConstraintError,
   cast,
   createRepo,
-  type ErrorMessagesOf,
+  type ErrorMessages,
   isEgonError,
   type Json,
   NoResultsError,
@@ -91,7 +91,7 @@ export async function showUser(id: number): Promise<Response> {
 // What the client receives, typed from the schema: no class, no Date, no password.
 export type SignUpResponse =
   | { readonly user: Json<User> } // 201
-  | { readonly errors: ErrorMessagesOf<ReturnType<typeof User.changeset>> }; // 422
+  | { readonly errors: ErrorMessages<ReturnType<typeof User.changeset>> }; // 422
 
 export async function submit(form: FormData): Promise<SignUpResponse> {
   const response = await fetch("/users", { method: "POST", body: JSON.stringify(Object.fromEntries(form)) });

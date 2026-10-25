@@ -41,4 +41,4 @@ names with other columns.
 |---|---|
 | [Showing form errors (React)](/recipes/form-errors) | A server action that returns `errorMessages()`, and fields that show them. |
 | [Translating error messages](/recipes/translating-errors) | `traverseErrors` with a message catalogue and plural rules. |
-| [Errors as HTTP responses](/recipes/error-responses) | 422 for an invalid changeset, 404, 409 and 500 for the rest, typed on the client with `Json` and `ErrorMessagesOf`. |
+| [Errors as HTTP responses](/recipes/error-responses) | 422 for an invalid changeset, 404, 409 and 500 for the rest, typed on the client with `Json` and `ErrorMessages`. |

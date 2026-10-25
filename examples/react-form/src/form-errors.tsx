@@ -4,7 +4,7 @@
 // (A package of its own, so that the React types stay out of the docs site's dependencies.)
 // #region setup
 import { postgres } from "@egon-orm/postgres";
-import { cast, createRepo, type ErrorMessagesOf, Schema, t } from "egon-orm";
+import { cast, createRepo, type ErrorMessages, Schema, t } from "egon-orm";
 import { useActionState } from "react";
 
 const repo = createRepo({ adapter: postgres({ connectionString: process.env.DATABASE_URL }) });
@@ -28,7 +28,7 @@ class User extends Schema("users", {
 // "use server";
 // Runs on the server. The state it returns is plain data, so it crosses to the client as it is.
 // The errors of User.changeset, typed by field: { email?: string[]; name?: string[]; … }.
-export type SignUpErrors = ErrorMessagesOf<ReturnType<typeof User.changeset>>;
+export type SignUpErrors = ErrorMessages<ReturnType<typeof User.changeset>>;
 
 export type SignUpState = {
   values: Record<string, string>;

@@ -145,7 +145,7 @@ Guide: [Changesets and validation](/guide/changesets).
 | [`EmbedName`](/api/reference/egon-orm/type-aliases/EmbedName) | type | The names `castEmbed` and `putEmbed` take. |
 | [`EmbedTarget`](/api/reference/egon-orm/type-aliases/EmbedTarget) | type | The embedded schema class of embed field `K` of `S`, or `never` when the types do not know it. |
 | [`ErrorFormatter`](/api/reference/egon-orm/type-aliases/ErrorFormatter) | type | The callback of `traverseErrors`. |
-| [`ErrorMessagesOf`](/api/reference/egon-orm/type-aliases/ErrorMessagesOf) | type | The type of `errorMessages()`. |
+| [`ErrorMessages`](/api/reference/egon-orm/type-aliases/ErrorMessages) | type | The type of `errorMessages()`. |
 | [`ErrorTree`](/api/reference/egon-orm/interfaces/ErrorTree) | interface | The errors of a changeset as `traverseErrors` returns them. |
 | [`ErrorTreeOf`](/api/reference/egon-orm/type-aliases/ErrorTreeOf) | type | What `traverseErrors(changeset, fn)` returns, for a changeset of type `C` and a callback returning `T`. |
 | [`FieldChange`](/api/reference/egon-orm/type-aliases/FieldChange) | type | The change of field `K` of `S` in `changeset.changes`. |

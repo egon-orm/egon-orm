@@ -84,9 +84,9 @@ vulnerability is in
 | TypeScript | 5.8 or later (owner decision, 2026-10-22) | the newest 5.8.x, the latest release and 6.0 (the workspace's version), with the consumer checks |
 | Module formats | ES modules; CommonJS through `require()` of the ES modules (Node.js 22.12 or later) | both, from installed packages |
 | TypeScript `moduleResolution` | `nodenext`, `node16`, `bundler` | all three, and a CommonJS file under `nodenext` |
-| PostgreSQL | 14 or later | 16 |
+| PostgreSQL | 14 or later | 14 (the floor) and 16 |
 | SQLite | 3.39 or later (the one `better-sqlite3` bundles) | the bundled one |
-| MySQL | 8.0.31 or later | 8.4 |
+| MySQL | 8.0.31 or later | 8.0.31 (the floor) and 8.4 |
 
 The drivers are peer dependencies, installed by you:
 
@@ -97,7 +97,7 @@ The drivers are peer dependencies, installed by you:
 | | `@types/pg` (optional, for TypeScript) | `^8.21.0` | 8.21.0 and the newest 8.x |
 | `@egon-orm/sqlite` | `better-sqlite3` | `^12.4.1 \|\| ^13.0.0` | 12.4.1 and the newest 13.x |
 | `@egon-orm/mysql` | `mysql2` | `^3.11.0` | 3.11.0 and the newest 3.x |
-| `@egon-orm/zod` | `zod` | `^4.3.0` | 4.3.0 and the newest 4.x |
+| `@egon-orm/zod` | `zod` | `^4.6.6` | 4.6.6 and the newest 4.x |
 
 TypeScript 5.8 is the minimum for ES module and CommonJS projects alike: it is the first
 release that types a `require()` of an ES module, which a CommonJS project does.
@@ -163,7 +163,7 @@ The `egon` command prints full messages.
 ### Removed and renamed exports
 
 A few names that were exported before 0.1.0 are gone or renamed (owner decisions,
-2026-10-22). Nothing replaces the removed functions: the adapters call them for you.
+2026-10-22 and 2026-10-24). Nothing replaces the removed functions: the adapters call them for you.
 
 | Before | From 0.1.0 |
 |---|---|
@@ -171,6 +171,7 @@ A few names that were exported before 0.1.0 are gone or renamed (owner decisions
 | `normalizeSqliteError` from `@egon-orm/sqlite` | Not exported. |
 | `normalizeMysqlError` from `@egon-orm/mysql` | Not exported. |
 | `ConstraintOptions` from `egon-orm/migration` (the options of `m.createConstraint`) | `CreateConstraintOptions`. The `ConstraintOptions` of `egon-orm`, a changeset's constraint options, is unchanged. |
+| `ErrorMessagesOf` from `egon-orm` (the type of `errorMessages()`) | `ErrorMessages`. |
 | `plan()`, `named` and `query` of a `PreparedQuery`; `operations` of the migration builder; the protected `context` and `added` of the migration builders | Not in the published declarations. They were for the library's own use. |
 
 `createAdapter` stays exported, but it is internal to the Egon packages: its driver

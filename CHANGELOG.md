@@ -17,15 +17,18 @@ changesets, composable queries and a repo, typed end to end with no code generat
 modules only; a CommonJS project loads them with `require()`. Postgres 14 or later, SQLite
 3.39 or later, MySQL 8.0.31 or later
 ([supported versions](https://egon-orm.github.io/egon-orm/reference/upgrading#supported-versions)).
+`@egon-orm/zod` needs Zod 4.6.6 or later: earlier releases have a memory-exhaustion
+advisory ([`GHSA-mrhx-c7xc-m3w5`](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)).
 
 If you used the packages from this repository before this release, read
 [Upgrading to 0.1.0](https://egon-orm.github.io/egon-orm/reference/upgrading#_0-1-0): the
 error constructors take an identifier first, error messages are short by default, the
 dialect packages no longer export `normalizePgError`, `normalizeSqliteError` and
 `normalizeMysqlError`, `ConstraintOptions` of `egon-orm/migration` is now
-`CreateConstraintOptions`, and the published declarations leave out members that were only
-for the library's own use (`plan()`, `named` and `query` of a `PreparedQuery`, `operations`
-of the migration builder, and the migration builders' `context` and `added`).
+`CreateConstraintOptions`, `ErrorMessagesOf` is now `ErrorMessages`, and the published
+declarations leave out members that were only for the library's own use (`plan()`, `named`
+and `query` of a `PreparedQuery`, `operations` of the migration builder, and the migration
+builders' `context` and `added`).
 
 ### Packages
 

@@ -82,6 +82,30 @@ jobs:
       - if: failure()
         run: docker compose --profile tier2 logs --no-color
 
+  # The integration suites against the oldest supported database releases, Postgres 14 and
+  # MySQL 8.0.31 (the floors in docs/site/reference/upgrading.md), from the `floors` compose
+  # profile on ports of their own. SQLite's suites run here too. A required check through the
+  # ci job below.
+  integration-floors:
+    name: integration (database floors)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm db:up:floors
+      - name: Print the server versions
+        run: |
+          docker compose exec -T postgres-floor psql -U egon -d egon_dev -tAc "select version()"
+          docker compose exec -T mysql-floor mysql -uroot -pegon -h 127.0.0.1 -NBe "select version()"
+      - run: pnpm test:integration
+        env:
+          EGON_TEST_TIER2: "1"
+          EGON_PG_PORT: "54314"
+          EGON_MYSQL_PORT: "33031"
+      - if: failure()
+        run: docker compose --profile floors logs --no-color
+
   build:
     name: build+publint+attw
     runs-on: ubuntu-latest
@@ -271,7 +295,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [lint, typecheck, test, integration, integration-tier2, build, peers, typescript, release, edge-worker, runtime, docs]
+    needs: [lint, typecheck, test, integration, integration-tier2, integration-floors, build, peers, typescript, release, edge-worker, runtime, docs]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

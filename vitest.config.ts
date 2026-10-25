@@ -63,9 +63,13 @@ function projectsFor(pkg: (typeof PACKAGES)[number]): TestProjectConfiguration[]
         root,
         environment: "node",
         include: ["src/**/*.itest.ts", "test/**/*.itest.ts"],
-        // Gives the run an id and sweeps leaked test databases before and after it.
+        // Gives the run an id and sweeps leaked test databases before and after it; after
+        // it, also fails the run on a pool left with a connection checked out (leak-check.ts).
         globalSetup: [fromRoot("./packages/core/test/support/global-setup.ts")],
-        setupFiles: [fromRoot("./packages/core/test/support/full-messages.ts")],
+        setupFiles: [
+          fromRoot("./packages/core/test/support/full-messages.ts"),
+          fromRoot("./packages/core/test/support/leak-check.ts"),
+        ],
         // Files run in parallel (each owns a database, see test/support/db.ts);
         // tests inside one file run serially.
         fileParallelism: true,
@@ -81,7 +85,8 @@ function projectsFor(pkg: (typeof PACKAGES)[number]): TestProjectConfiguration[]
  * The two files that prove integration files can run concurrently (step 01 acceptance).
  * They only pass when they overlap in time, which needs two workers, so they are not part
  * of `core:integration`: `parallel.itest.ts` there starts this project in its own Vitest
- * process with exactly two workers. No globalSetup on purpose; the outer run owns the sweep.
+ * process with exactly two workers. No globalSetup on purpose; the outer run owns the sweep
+ * and the leak check, to which leak-check.ts reports (the nested run inherits its run id).
  */
 const parallelPair: TestProjectConfiguration = {
   resolve: { alias },
@@ -90,6 +95,7 @@ const parallelPair: TestProjectConfiguration = {
     root: fromRoot("./packages/core"),
     environment: "node",
     include: ["test/support/parallel-*.pair.ts"],
+    setupFiles: [fromRoot("./packages/core/test/support/leak-check.ts")],
     fileParallelism: true,
     testTimeout: 30_000,
     hookTimeout: 60_000,
@@ -110,6 +116,8 @@ const sandboxPair: TestProjectConfiguration = {
     root: fromRoot("./packages/core"),
     environment: "node",
     include: ["test/conformance/transaction/sandbox-*.pair.ts"],
+    // Reports to the leak check of the outer run, whose run id the nested run inherits.
+    setupFiles: [fromRoot("./packages/core/test/support/leak-check.ts")],
     fileParallelism: true,
     testTimeout: 30_000,
     hookTimeout: 60_000,
@@ -129,7 +137,12 @@ const blog: TestProjectConfiguration = {
     root: fromRoot("./examples/blog"),
     environment: "node",
     include: ["test/**/*.itest.ts"],
-    setupFiles: ["test/test-database.ts", "test/setup.ts"],
+    // leak-check.ts first, so that its afterAll runs after those of the blog's own setup.
+    setupFiles: [
+      fromRoot("./packages/core/test/support/leak-check.ts"),
+      "test/test-database.ts",
+      "test/setup.ts",
+    ],
     globalSetup: [fromRoot("./packages/core/test/support/global-setup.ts")],
     fileParallelism: true,
     sequence: { concurrent: false },
@@ -183,6 +196,7 @@ const docsExamples: TestProjectConfiguration = {
     environment: "node",
     include: ["test/**/*.itest.ts"],
     globalSetup: [fromRoot("./packages/core/test/support/global-setup.ts")],
+    setupFiles: [fromRoot("./packages/core/test/support/leak-check.ts")],
     sequence: { concurrent: false },
     testTimeout: 30_000,
     hookTimeout: 60_000,

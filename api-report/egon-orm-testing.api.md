@@ -492,8 +492,8 @@ class Changeset<S extends ChangesetSource = AnySchema, New extends boolean = boo
     readonly constraints: readonly Constraint[];
     readonly data: DataMember<S, New>;
     deleteChange(field: FieldName<S>): this;
-    // Warning: (ae-forgotten-export) The symbol "ErrorMessagesOf" needs to be exported by the entry point testing.d.ts
-    errorMessages<C extends ChangesetLike>(this: C): ErrorMessagesOf<C>;
+    // Warning: (ae-forgotten-export) The symbol "ErrorMessages" needs to be exported by the entry point testing.d.ts
+    errorMessages<C extends ChangesetLike>(this: C): ErrorMessages<C>;
     // Warning: (ae-forgotten-export) The symbol "ChangesetError" needs to be exported by the entry point testing.d.ts
     readonly errors: Readonly<Record<string, readonly ChangesetError[]>>;
     exclusionConstraint(field: FieldName<S>, options?: ConstraintOptions): this;
@@ -933,7 +933,7 @@ type ErrorKeys<S, E extends string> = FieldName<S> | (string extends AssocName<S
 // Warning: (ae-forgotten-export) The symbol "ErrorTreeOf" needs to be exported by the entry point testing.d.ts
 //
 // @public
-type ErrorMessagesOf<C> = C extends AnySchema ? TypedErrorTree<C, never, string> : ErrorTreeOf<C, string>;
+type ErrorMessages<C> = C extends AnySchema ? TypedErrorTree<C, never, string> : ErrorTreeOf<C, string>;
 
 // Warning: (ae-forgotten-export) The symbol "NestedErrors" needs to be exported by the entry point testing.d.ts
 // Warning: (ae-forgotten-export) The symbol "EmbedMany" needs to be exported by the entry point testing.d.ts

@@ -4,7 +4,7 @@ import { type Comment, Post, type Profile, type Tag, User, type UserSettings } f
 import { describe, expectTypeOf, test } from "vitest";
 import type { Changeset } from "./changeset/changeset.js";
 import { cast } from "./changeset/changeset.js";
-import type { ErrorMessagesOf } from "./changeset/types.js";
+import type { ErrorMessages } from "./changeset/types.js";
 import type { Result } from "./contracts/result.js";
 import type { Loaded, LoadedAs, PreloadSpec, Row } from "./contracts/schema.js";
 import { from } from "./query/builder.js";
@@ -321,10 +321,10 @@ describe("JsonReturn", () => {
     expectTypeOf<Extract<Response, { success: true }>["data"]>().toEqualTypeOf<Json<User>>();
   });
 
-  test("of a server action returning errorMessages() is ErrorMessagesOf", () => {
+  test("of a server action returning errorMessages() is ErrorMessages", () => {
     const action = (params: unknown) =>
       cast(User, params, ["email"]).validateRequired(["email"]).errorMessages();
-    expectTypeOf<JsonReturn<typeof action>>().branded.toEqualTypeOf<ErrorMessagesOf<typeof User>>();
+    expectTypeOf<JsonReturn<typeof action>>().branded.toEqualTypeOf<ErrorMessages<typeof User>>();
     expectTypeOf<JsonReturn<typeof action>["posts"]>().not.toBeAny();
   });
 
