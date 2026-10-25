@@ -223,16 +223,19 @@ minification" for two chunks:
 The owner chose (a): exempt only the local search index, and hold every other chunk to 500 kB.
 
 - **The plugin**, `egon-docs-chunk-sizes`, is in `docs/site/.vitepress/config.ts` (`vite.plugins`).
-  In `generateBundle` it measures every JS chunk (`Buffer.byteLength` of the minified code,
-  in kB of 1,000 bytes, as Vite reports) and calls `this.error`, which fails the build, when
-  a chunk is over its limit: `CHUNK_LIMIT_KB = 500` for every chunk, and
-  `SEARCH_INDEX_LIMIT_KB = 1_500` for the search index. It runs in the client and the server
-  build.
+  It runs on the client build only (`apply: (_config, env) => !env.isSsrBuild`), as Vite's
+  own warning does: the server build is not minified. In `generateBundle` it measures every
+  JS chunk as `Buffer.byteLength(chunk.code) / 1000`, the minified code's size in UTF-8 bytes,
+  in kB of 1,000 bytes. That is never less than the `code.length` Vite's warning uses (0.1 to
+  0.3% more in this build). It calls `this.error`, which fails the build, when a chunk is
+  over its limit: `CHUNK_LIMIT_KB = 500` for every chunk, and `SEARCH_INDEX_LIMIT_KB = 1_500`
+  for the search index.
 - **How the search-index chunk is identified:** by its facade module, not its file name.
   VitePress imports the index as `@localSearchIndex<locale>` and its `resolveId` hook
   returns `/${id}` (`vitepress/dist/node/chunk-*.js`, `LOCAL_SEARCH_INDEX_ID`), so the
   chunk's `facadeModuleId` is `/@localSearchIndexroot` for this site's one locale. The plugin
-  matches `/^\/@localSearchIndex[^/]*$/`, which covers any later locale. The first failure
+  matches `/^\/@localSearchIndex[^/]+$/`, which covers any later locale and not the
+  locale-map module `/@localSearchIndex` itself. The first failure
   run below shows the match working: the 778 kB chunk was checked against the
   search-index limit, not the 500 kB one.
 - **The threshold:** the index was 778 kB on 2026-10-25 (778,301 bytes at this PR's head). 1,500 kB is about
@@ -248,8 +251,12 @@ The owner chose (a): exempt only the local search index, and hold every other ch
     assets/api_reference_egon-orm_classes_CastError.md.B6Pu2dbu.js is 268.3 kB after
     minification, over the 250 kB limit for a chunk (docs/site/.vitepress/config.ts,
     egon-docs-chunk-sizes).`
-- After restoring, `pnpm docs:build` passes with no chunk warning. The largest other chunk
-  is about 300 kB, an API page (`EgonError`).
+- After restoring, `pnpm docs:build` passes with no chunk warning. The largest client chunk
+  other than the search index is 300.2 kB, an API page (`EgonError`).
+- **Client only, checked (review round 3):** with the chunk limit at 350 kB, under the
+  largest server-build chunk (389.3 kB, unminified) and over the largest client chunk, the
+  build passed; at 290 kB it failed on the client `EgonError` chunk (300.2 kB). Restored to
+  500 afterwards.
 
 ### Checks changed
 
@@ -354,11 +361,46 @@ and (c).
    (merged from `main` into this branch, #76) §10 is recast from issue drafts into the
    tracked list of open items, which is the record. Each entry keeps its rank (its P number)
    and owner (§7), and an item's owner plus its entry in the list fills the role of "an owner
-   and issue". Only wording and labels changed, and no item was dropped or changed:
-   - "Proposed issue" became "Entry", and "Body" became "Detail".
-   - §7's columns "Issue" became "Item" and "Tracked in", and "proposed in §10" became
-     "§10 list".
-   - The §5 acceptance box says the list fills the issue's role. It stays unticked, as the
-     audit left it.
+   and issue". Only wording and labels changed, and no item was dropped or changed. The
+   complete list:
+   - In §10, the 12 "Proposed issue" labels became "Entry", and the 12 "Body" labels became
+     "Detail".
+   - §10's heading became "Needs the owner's decision: the tracked list of open items". Its
+     intro was rewritten: the list is the record, with an entry's rank as its P number and
+     its owner as §7's Owner column. The sentences "No GitHub issue exists for any item (the
+     repository has none)" and "I created none" were removed.
+   - In §10, item 12's heading "one umbrella issue" became "one entry".
+   - §7's heading "Open issues" became "Open items", and its columns "Issue" became "Item"
+     and "Tracked in".
+   - In §7's "Tracked in" column, "proposed in §10" became "§10 list" (9 cells), P5's
+     "roadmap row; proposed issue in §10" became "roadmap row; §10 list", and P13's
+     "proposed in §10 (one umbrella issue)" became "§10 list (one entry)".
+   - In §3, the release-settings row's cell "proposed issue in §10" became "entry 1 in the
+     §10 list".
+   - In §5, the "owner and issue" box was reworded to the past tense ("At the audit, none had
+     a GitHub issue"), the decision was added, and "Ticked once the owner opens them." was
+     removed. The box stayed unticked then (it is ticked in review round 3, below).
    - One line was added to the report's owner decisions.
    - The review-round history at the end of the report was left as written.
+
+## Review round 3 (PR #77, changes requested)
+
+1. **The chunk plugin runs on the client build only** (`apply: (_config, env) =>
+   !env.isSsrBuild`). The server build is unminified, and with the plugin on it the 500 kB
+   limit would have tripped on server code, with a message saying "after minification".
+   Checked as §6.1 says: with the limit at 350 kB the build passed, and at 290 kB it failed.
+2. §6.1 now says exactly how the size is measured, `Buffer.byteLength(chunk.code) / 1000`,
+   no less than Vite's `code.length`, and that the plugin runs on the client build only.
+3. "The largest other chunk" now says it is the largest client chunk (300.2 kB).
+4. The list of wording changes in `21-audit.md` is complete (above, owner decision 2).
+5. `21-audit.md`: P11's "Tracked in" now says §9, the release checklist, which is where it is
+   (it said §10, a slip from before this PR). §10's intro now says the release-time items
+   P11 and P15 are tracked in the §9 checklist.
+6. The search-index regex is `[^/]+`, an exact match that leaves out the locale-map module.
+7. `21-audit.md`: P1, P2, P9, P10 and P14 are marked "addressed by #77", with a pointer to
+   this note's section (§1, §4, §6, §5 and §3), in §7's "Tracked in" column and as a status
+   line on their §10 entries. Their text is unchanged.
+8. `21-audit.md` §5: the box "no not-ready item without an owner and issue" is ticked, with a
+   clause citing the owner's decision of 2026-10-25 (no GitHub issues): each "not ready"
+   item's owner plus its §10 entry fill the role. The reviewer checked both "not ready" items
+   (P0 and P2) have an owner and a §10 entry. `docs/plan/21-release.md` is not edited.
