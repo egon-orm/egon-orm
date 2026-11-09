@@ -7,7 +7,9 @@
 //    the version pull request. Every published package must move to one new version (the
 //    fixed group), get a CHANGELOG.md entry and its VERSION constant; no private package
 //    may change; the pending changesets are consumed. The result is committed, as merging
-//    the version pull request would.
+//    the version pull request would. A tree with no pending changeset (the version pull
+//    request itself, or main after a release) gets a patch changeset for `egon-orm` first,
+//    so that `ci`, which main requires, can pass there.
 // 3. Publish, as the release workflow does it, with the registry pointed at verdaccio:
 //    `changeset publish-plan` (what select-mode runs to choose "publish") must list every
 //    package at the new version; `changeset pack --from-publish-plan` (the pack job) packs
@@ -15,9 +17,10 @@
 //    First with provenance on (PNPM_CONFIG_PROVENANCE, as release.yml sets it): with no OIDC
 //    token to sign it, every package must be refused before anything is uploaded. Then with
 //    provenance off, since it needs the OIDC token of a GitHub Actions run (as trusted
-//    publishing does, which verdaccio cannot exercise). Every package must then be in the registry at the new version, with no `workspace:` range left in its
-//    manifest and its README as the readme; a git tag `<name>@<version>` must exist for
-//    each; and the publish plan must be empty (select-mode's "none").
+//    publishing does, which verdaccio cannot exercise). Every package must then be in the
+//    registry at the new version, with no `workspace:` range left in its manifest and its
+//    README as the readme; a git tag `<name>@<version>` must exist for each; and the publish
+//    plan must be empty (select-mode's "none").
 // 4. Release notes: each package's CHANGELOG section for the version, which the publish job
 //    posts as the GitHub release of its tag, is written out (and the core one printed).
 // 5. Install: a fresh project installs every package from the registry with npm, then
@@ -163,10 +166,20 @@ try {
       JSON.stringify(published.map((pkg) => pkg.manifest.name).sort()),
     "the fixed group is not the set of published packages",
   );
-  const pending = readdirSync(join(clone, ".changeset")).filter(
-    (file) => file.endsWith(".md") && file !== "README.md",
-  );
-  check(pending.length > 0, "there is no pending changeset, so there is nothing to release");
+  const pendingIn = () =>
+    readdirSync(join(clone, ".changeset")).filter((file) => file.endsWith(".md") && file !== "README.md");
+  // The "Version packages" pull request, and main after a release, have no pending changeset:
+  // `ci` must still pass there (main requires it), so the dry run releases a patch instead.
+  if (pendingIn().length === 0) {
+    writeFileSync(
+      join(clone, ".changeset/dry-run-patch.md"),
+      '---\n"egon-orm": patch\n---\n\nA patch, for the dry run of a tree with no pending changeset.\n',
+    );
+    git(["add", ".changeset/dry-run-patch.md"], clone);
+    git(["commit", "--quiet", "-m", "Dry run: a patch changeset"], clone);
+    ok("no pending changeset (a version pull request, or main after a release): added a patch one");
+  }
+  const pending = pendingIn();
   ok(`${published.length} published packages in one fixed group; pending changesets: ${pending.join(", ")}`);
 
   step("version (the version pull request)");

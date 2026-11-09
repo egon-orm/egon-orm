@@ -383,8 +383,9 @@ the first release. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc`
 set; none is, and pnpm prefers the OIDC token anyway.
 
 `pnpm release:dry-run` (`scripts/release-dry-run.mjs`, also the `release dry run` CI job)
-runs steps 2 and 3 against a local verdaccio registry from a clean clone of `HEAD`: it
-versions, checks the publish plan, packs, checks that a publish with
+runs steps 2 and 3 against a local verdaccio registry from a clean clone of `HEAD` (with a
+patch changeset added when none is pending, as on the version pull request, so that `ci`
+passes there): it versions, checks the publish plan, packs, checks that a publish with
 `PNPM_CONFIG_PROVENANCE=true` and no OIDC token is refused before anything is uploaded,
 publishes from the pack directory with provenance off, checks the published manifests (no
 `workspace:` ranges, the README) and that the plan is then empty, the tags and the release
