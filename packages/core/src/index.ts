@@ -5,10 +5,10 @@
  * ```ts
  * import { VERSION } from "egon-orm";
  *
- * console.log(VERSION); // "0.0.0"
+ * console.log(VERSION); // "0.1.0"
  * ```
  */
-export const VERSION: string = "0.0.0";
+export const VERSION: string = "0.1.0";
 
 // Step 11: the shared adapter. `createAdapter` and `AdapterDefinition` are internal to the
 // Egon packages (owner decision, 2026-10-22): they are exported only so that the dialect

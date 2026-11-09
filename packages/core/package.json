@@ -1,6 +1,6 @@
 {
   "name": "egon-orm",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A TypeScript ORM with schemas, changesets, composable queries and a repo, typed end to end.",
   "license": "MIT",
   "author": "Casey Tickes",

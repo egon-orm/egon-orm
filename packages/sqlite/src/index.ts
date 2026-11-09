@@ -21,10 +21,10 @@ export type { PragmaValue, SqliteOptions } from "./options.js";
  * ```ts
  * import { VERSION } from "@egon-orm/sqlite";
  *
- * console.log(VERSION); // "0.0.0"
+ * console.log(VERSION); // "0.1.0"
  * ```
  */
-export const VERSION: string = "0.0.0";
+export const VERSION: string = "0.1.0";
 
 /**
  * Creates a SQLite adapter over `better-sqlite3`: one database handle, used by one

@@ -1,6 +1,6 @@
 {
   "name": "@egon-orm/mysql",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "MySQL adapter for Egon ORM.",
   "license": "MIT",
   "author": "Casey Tickes",

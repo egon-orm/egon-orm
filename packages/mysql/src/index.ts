@@ -21,10 +21,10 @@ export type { MysqlOptions, MysqlPoolOptions } from "./options.js";
  * ```ts
  * import { VERSION } from "@egon-orm/mysql";
  *
- * console.log(VERSION); // "0.0.0"
+ * console.log(VERSION); // "0.1.0"
  * ```
  */
-export const VERSION: string = "0.0.0";
+export const VERSION: string = "0.1.0";
 
 /**
  * Creates a MySQL adapter over `mysql2`: a connection pool, statements with bound
