@@ -78,27 +78,43 @@ export function findReleaseProblems(config, packages) {
  * .github/workflows/release.yml) publishes, given the root manifest's `packageManager`.
  * `changeset publish` runs `pnpm publish`, and pnpm 12 does the trusted publishing and the
  * provenance itself and reads only `PNPM_CONFIG_*` variables: an `NPM_CONFIG_PROVENANCE`
- * key would be ignored.
+ * key would be ignored anywhere in the file. The other checks look only at the `publish`
+ * job's block (from `  publish:` to the next job), since a key in another job does not help it.
  */
 export function findWorkflowProblems(workflow, packageManager) {
   const problems = [];
   const at = ".github/workflows/release.yml";
-  const pnpm = /^pnpm@(\d+)\.\d+\.\d+$/.exec(packageManager ?? "");
+  // `corepack use` writes `pnpm@X.Y.Z+sha512.<hash>`; pnpm accepts both forms.
+  const pnpm = /^pnpm@(\d+)\.\d+\.\d+(?:\+\S+)?$/.exec(packageManager ?? "");
   if (pnpm === null || Number(pnpm[1]) < 12)
     problems.push(
       `package.json: packageManager must pin pnpm 12 or later (it publishes, with trusted publishing), not ${packageManager}.`,
     );
   if (/^\s*NPM_CONFIG_PROVENANCE\s*:/m.test(workflow))
     problems.push(`${at}: NPM_CONFIG_PROVENANCE is ignored by pnpm; set PNPM_CONFIG_PROVENANCE.`);
-  if (!/^\s*PNPM_CONFIG_PROVENANCE\s*:\s*"true"\s*$/m.test(workflow))
-    problems.push(`${at}: the publish step must set PNPM_CONFIG_PROVENANCE: "true".`);
-  if (!/^\s*id-token\s*:\s*write\b/m.test(workflow))
+  const job = publishJob(workflow);
+  if (job === undefined) {
+    problems.push(`${at}: there is no \`publish\` job.`);
+    return problems;
+  }
+  if (!/^\s*PNPM_CONFIG_PROVENANCE\s*:\s*(?:true|"true"|'true')\s*(?:#.*)?$/m.test(job))
+    problems.push(`${at}: the publish job must set PNPM_CONFIG_PROVENANCE: "true".`);
+  if (!/^\s*id-token\s*:\s*write\b/m.test(job))
     problems.push(`${at}: the publish job needs \`id-token: write\` (trusted publishing and provenance).`);
-  if (!/^\s*environment\s*:\s*npm\s*$/m.test(workflow))
+  if (!/^\s*environment\s*:\s*(?:npm|\n\s+name\s*:\s*npm)\s*(?:#.*)?$/m.test(job))
     problems.push(
       `${at}: the publish job must use the environment \`npm\`, which its trusted publishers name.`,
     );
   return problems;
+}
+
+/** The lines of the `publish` job of a workflow (`jobs:` children at two spaces), or undefined. */
+function publishJob(workflow) {
+  const lines = workflow.split("\n");
+  const start = lines.findIndex((line) => /^ {2}publish\s*:\s*(?:#.*)?$/.test(line));
+  if (start === -1) return undefined;
+  const end = lines.findIndex((line, index) => index > start && /^ {0,2}[^\s#]/.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end).join("\n");
 }
 
 /** `text` without the indentation its lines share. */

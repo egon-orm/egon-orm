@@ -23,7 +23,7 @@ name: Release
 # Who publishes: the action runs the workspace's `changeset publish`, which, in a pnpm
 # workspace, runs `pnpm publish <tarball>` for each package. pnpm 12 publishes by itself (it
 # does not call the npm CLI), so the npm CLI's version does not matter here; the `publish`
-# job checks that the pnpm on PATH is the one package.json pins.
+# job checks that the pnpm that runs in this workspace is the one package.json pins.
 #
 # npm authentication: trusted publishing (OIDC). Each package has this repository, this
 # workflow file (release.yml) and the environment `npm` as its trusted publisher on
@@ -147,15 +147,16 @@ jobs:
           install: false
       - run: pnpm install --frozen-lockfile --ignore-scripts
       # pnpm does the trusted publishing and the provenance itself; the release dry run checks
-      # that this pnpm honours PNPM_CONFIG_PROVENANCE. Fail before publishing if another
-      # pnpm is on PATH.
+      # that the pinned pnpm honours PNPM_CONFIG_PROVENANCE. Fail before publishing unless the
+      # pnpm that runs in this workspace (after any switch to the pinned version) is the one
+      # package.json pins (a `+sha512.…` suffix on the pin is ignored).
       - name: check the publisher
         run: |
-          expected="$(node -p 'require("./package.json").packageManager')"
+          expected="$(node -p 'require("./package.json").packageManager.replace(/\+.*$/, "")')"
           actual="pnpm@$(pnpm --version)"
           echo "publisher: ${actual}"
           if [ "${actual}" != "${expected}" ]; then
-            echo "::error::the pnpm on PATH is ${actual}; package.json pins ${expected}"
+            echo "::error::the pnpm in this workspace is ${actual}; package.json pins ${expected}"
             exit 1
           fi
       # Not used: there is no NPM_TOKEN secret (trusted publishing). Harmless while it is unset.

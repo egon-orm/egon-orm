@@ -372,7 +372,7 @@ for `main`.
 **Authentication to npm is trusted publishing (OIDC); there is no npm token.** pnpm 12
 publishes by itself, without the npm CLI, and exchanges the job's OIDC token for a publish
 token (so npm's requirement of npm 11.5.1 for its own CLI does not apply; the job checks
-that the pnpm on PATH is the one `packageManager` pins). The first version of each package
+that the pnpm that runs in the workspace is the one `packageManager` pins). The first version of each package
 was a `0.0.1` placeholder the owner published by hand; each package then has, as its
 trusted publisher on npmjs.com, the repository `egon-orm/egon-orm`, the workflow
 `release.yml` and the environment `npm`, so no publish from the workflow creates a
@@ -383,10 +383,12 @@ the first release. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc`
 set; none is, and pnpm prefers the OIDC token anyway.
 
 `pnpm release:dry-run` (`scripts/release-dry-run.mjs`, also the `release dry run` CI job)
-runs steps 2 and 3 against a local verdaccio registry from a clean clone of `HEAD` (with a
-patch changeset added when none is pending, as on the version pull request, so that `ci`
-passes there): it versions, checks the publish plan, packs, checks that a publish with
-`PNPM_CONFIG_PROVENANCE=true` and no OIDC token is refused before anything is uploaded,
+runs steps 2 and 3 against a local verdaccio registry from a clean clone of `HEAD`: it
+versions (or, when no changeset is pending, as on the version pull request itself, takes the
+tree as it stands, requiring one version, a non-empty `## <version>` section in each package
+`CHANGELOG.md` and `VERSION` at that version), checks the publish plan, packs, checks that
+`pnpm publish` of each tarball with `PNPM_CONFIG_PROVENANCE=true` and no OIDC token is
+refused with a provenance or id-token error and that nothing reaches the registry,
 publishes from the pack directory with provenance off, checks the published manifests (no
 `workspace:` ranges, the README) and that the plan is then empty, the tags and the release
 notes, installs the packages from that registry with npm and loads every entry point, then

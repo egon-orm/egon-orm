@@ -151,8 +151,21 @@ describe("findReadmeProblems", () => {
 });
 
 describe("findWorkflowProblems", () => {
+  // Three jobs, like release.yml: the checks must find the keys in `publish`, not elsewhere.
   const workflow = (env = '          PNPM_CONFIG_PROVENANCE: "true"') =>
     [
+      "on:",
+      "  push:",
+      "jobs:",
+      "  version:",
+      "    permissions:",
+      "      contents: write",
+      "      pull-requests: write",
+      "    steps:",
+      "      - uses: changesets/action/version@sha # v2.1.2",
+      "  pack:",
+      "    steps:",
+      "      - run: pnpm smoke",
       "  publish:",
       "    environment: npm",
       "    permissions:",
@@ -167,6 +180,50 @@ describe("findWorkflowProblems", () => {
 
   test("accepts pnpm 12 with PNPM_CONFIG_PROVENANCE, id-token: write and the npm environment", () => {
     assert.deepEqual(findWorkflowProblems(workflow(), "pnpm@12.11.2"), []);
+  });
+
+  test("accepts an unquoted true and a pin with a corepack hash", () => {
+    assert.deepEqual(
+      findWorkflowProblems(
+        workflow("          PNPM_CONFIG_PROVENANCE: true"),
+        "pnpm@12.11.2+sha512.0123abcd",
+      ),
+      [],
+    );
+  });
+
+  test("accepts the environment written as a mapping with a name", () => {
+    const mapping = workflow().replace("    environment: npm", "    environment:\n      name: npm");
+    assert.deepEqual(findWorkflowProblems(mapping, "pnpm@12.11.2"), []);
+  });
+
+  test("does not count PNPM_CONFIG_PROVENANCE set in another job", () => {
+    const elsewhere = workflow("").replace(
+      "      - run: pnpm smoke",
+      '      - run: pnpm smoke\n        env:\n          PNPM_CONFIG_PROVENANCE: "true"',
+    );
+    const problems = findWorkflowProblems(elsewhere, "pnpm@12.11.2");
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], /publish job must set PNPM_CONFIG_PROVENANCE/);
+  });
+
+  test("does not count id-token: write or the npm environment in another job", () => {
+    const elsewhere = workflow()
+      .replace("      id-token: write # trusted publishing\n", "")
+      .replace("    environment: npm\n", "")
+      .replace(
+        "      pull-requests: write",
+        "      pull-requests: write\n      id-token: write\n    environment: npm",
+      );
+    const problems = findWorkflowProblems(elsewhere, "pnpm@12.11.2");
+    assert.equal(problems.length, 2);
+    assert.match(problems[0], /id-token: write/);
+    assert.match(problems[1], /environment `npm`/);
+  });
+
+  test("rejects a workflow with no publish job", () => {
+    const problems = findWorkflowProblems(workflow().replace("  publish:", "  release:"), "pnpm@12.11.2");
+    assert.deepEqual(problems, [".github/workflows/release.yml: there is no `publish` job."]);
   });
 
   test("rejects NPM_CONFIG_PROVENANCE, which pnpm ignores", () => {

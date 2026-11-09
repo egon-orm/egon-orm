@@ -8,14 +8,17 @@
 //    fixed group), get a CHANGELOG.md entry and its VERSION constant; no private package
 //    may change; the pending changesets are consumed. The result is committed, as merging
 //    the version pull request would. A tree with no pending changeset (the version pull
-//    request itself, or main after a release) gets a patch changeset for `egon-orm` first,
-//    so that `ci`, which main requires, can pass there.
+//    request itself, or main after a release) is not versioned: its published packages must
+//    share one version, with a non-empty `## <version>` section in each CHANGELOG.md and
+//    VERSION at that version, and the steps below publish that tree as it stands.
 // 3. Publish, as the release workflow does it, with the registry pointed at verdaccio:
 //    `changeset publish-plan` (what select-mode runs to choose "publish") must list every
 //    package at the new version; `changeset pack --from-publish-plan` (the pack job) packs
 //    them; `changeset publish --from-pack-dir` (the publish job) publishes the tarballs.
-//    First with provenance on (PNPM_CONFIG_PROVENANCE, as release.yml sets it): with no OIDC
-//    token to sign it, every package must be refused before anything is uploaded. Then with
+//    First each tarball alone (`pnpm publish <tarball> --json`) with provenance on
+//    (PNPM_CONFIG_PROVENANCE, as release.yml sets it): with no OIDC token to sign it, pnpm
+//    must refuse each one with a provenance or id-token error, and nothing may reach the
+//    registry. Then `changeset publish --from-pack-dir` with
 //    provenance off, since it needs the OIDC token of a GitHub Actions run (as trusted
 //    publishing does, which verdaccio cannot exercise). Every package must then be in the
 //    registry at the new version, with no `workspace:` range left in its manifest and its
@@ -166,40 +169,47 @@ try {
       JSON.stringify(published.map((pkg) => pkg.manifest.name).sort()),
     "the fixed group is not the set of published packages",
   );
-  const pendingIn = () =>
-    readdirSync(join(clone, ".changeset")).filter((file) => file.endsWith(".md") && file !== "README.md");
-  // The "Version packages" pull request, and main after a release, have no pending changeset:
-  // `ci` must still pass there (main requires it), so the dry run releases a patch instead.
-  if (pendingIn().length === 0) {
-    writeFileSync(
-      join(clone, ".changeset/dry-run-patch.md"),
-      '---\n"egon-orm": patch\n---\n\nA patch, for the dry run of a tree with no pending changeset.\n',
+  const pending = readdirSync(join(clone, ".changeset")).filter(
+    (file) => file.endsWith(".md") && file !== "README.md",
+  );
+  let after;
+  let version;
+  if (pending.length > 0) {
+    ok(
+      `${published.length} published packages in one fixed group; pending changesets: ${pending.join(", ")}`,
     );
-    git(["add", ".changeset/dry-run-patch.md"], clone);
-    git(["commit", "--quiet", "-m", "Dry run: a patch changeset"], clone);
-    ok("no pending changeset (a version pull request, or main after a release): added a patch one");
-  }
-  const pending = pendingIn();
-  ok(`${published.length} published packages in one fixed group; pending changesets: ${pending.join(", ")}`);
-
-  step("version (the version pull request)");
-  console.log(pnpm(["version-packages"], clone).trim());
-  const after = workspacePackages(clone);
-  const versions = new Set(after.filter((pkg) => pkg.published).map((pkg) => pkg.manifest.version));
-  check(versions.size === 1, `the published packages have several versions: ${[...versions].join(", ")}`);
-  const [version] = versions;
-  check(version !== published[0].manifest.version, "the version did not change");
-  for (const pkg of after) {
-    const old = before.find((other) => other.path === pkg.path);
-    if (!pkg.published)
-      check(pkg.manifest.version === old.manifest.version, `private ${pkg.path} was versioned`);
+    step("version (the version pull request)");
+    console.log(pnpm(["version-packages"], clone).trim());
+    after = workspacePackages(clone);
+    const versions = new Set(after.filter((pkg) => pkg.published).map((pkg) => pkg.manifest.version));
+    check(versions.size === 1, `the published packages have several versions: ${[...versions].join(", ")}`);
+    [version] = versions;
+    check(version !== published[0].manifest.version, "the version did not change");
+    for (const pkg of after) {
+      const old = before.find((other) => other.path === pkg.path);
+      if (!pkg.published)
+        check(pkg.manifest.version === old.manifest.version, `private ${pkg.path} was versioned`);
+    }
+  } else {
+    // The "Version packages" pull request (and main after a release): nothing to version.
+    // Merging it publishes the tree as it stands, so the rest checks exactly that tree.
+    after = before;
+    const versions = new Set(published.map((pkg) => pkg.manifest.version));
+    check(versions.size === 1, `the published packages have several versions: ${[...versions].join(", ")}`);
+    [version] = versions;
+    ok(
+      `${published.length} published packages in one fixed group; no pending changeset (a version pull request, or main after a release): the tree as it stands, at ${version}`,
+    );
   }
   const notes = {};
   for (const pkg of after.filter((p) => p.published)) {
     const changelog = join(clone, pkg.path, "CHANGELOG.md");
     check(existsSync(changelog), `${pkg.path} has no CHANGELOG.md`);
     const section = changelogSection(readFileSync(changelog, "utf8"), version);
-    check(section !== undefined && section !== "", `${pkg.path}/CHANGELOG.md has no ${version} section`);
+    check(
+      section !== undefined && section !== "",
+      `${pkg.path}/CHANGELOG.md has no non-empty "## ${version}" section (the GitHub release body)`,
+    );
     notes[pkg.manifest.name] = section;
     const sources = ["index.ts", "version.ts"].map((file) => join(clone, pkg.path, "src", file));
     check(
@@ -211,16 +221,18 @@ try {
       `${pkg.path}: VERSION is not ${version}`,
     );
   }
-  const left = readdirSync(join(clone, ".changeset")).filter(
-    (file) => file.endsWith(".md") && file !== "README.md",
-  );
-  check(left.length === 0, `changesets left after versioning: ${left.join(", ")}`);
-  git(["add", "--all"], clone);
-  git(["commit", "--quiet", "-m", "Version packages"], clone);
-  ok(
-    `every published package is at ${version}, with a CHANGELOG entry and VERSION; no private package changed; committed`,
-  );
-  pnpm(["build"], clone);
+  if (pending.length > 0) {
+    const left = readdirSync(join(clone, ".changeset")).filter(
+      (file) => file.endsWith(".md") && file !== "README.md",
+    );
+    check(left.length === 0, `changesets left after versioning: ${left.join(", ")}`);
+    git(["add", "--all"], clone);
+    git(["commit", "--quiet", "-m", "Version packages"], clone);
+    ok(
+      `every published package is at ${version}, with a CHANGELOG entry and VERSION; no private package changed; committed`,
+    );
+    pnpm(["build"], clone);
+  } else ok(`every published package is at ${version}, with a "## ${version}" CHANGELOG section and VERSION`);
 
   step(`publish to verdaccio at ${REGISTRY}`);
   const storage = join(dir, "registry");
@@ -292,28 +304,48 @@ try {
     pnpm(["exec", "changeset", "pack", "--from-publish-plan", plan, "--out-dir", packDir], clone).trim(),
   );
   // release.yml asks for provenance with PNPM_CONFIG_PROVENANCE (pnpm ignores
-  // NPM_CONFIG_PROVENANCE). With it on and no OIDC token to sign with, the publish must fail
-  // for every package before any upload; a pnpm that stopped reading the variable would
-  // publish here instead.
-  let refused;
-  try {
-    pnpm(["exec", "changeset", "publish", "--from-pack-dir", packDir], clone, {
-      PNPM_CONFIG_PROVENANCE: "true",
-    });
-  } catch (error) {
-    refused = `${error.stdout ?? ""}${error.stderr ?? ""}`;
-  }
-  check(refused !== undefined, "with PNPM_CONFIG_PROVENANCE=true and no OIDC token, the publish succeeded");
-  const refusal = /ERR_PNPM_(?:PROVENANCE|ID_TOKEN)_\w+/.exec(refused);
+  // NPM_CONFIG_PROVENANCE). With it on and no OIDC token to sign with, pnpm must refuse each
+  // package before any upload; a pnpm that stopped reading the variable would publish here
+  // instead. Each tarball is tried on its own, as `changeset publish` runs it (`pnpm publish
+  // <tarball> --json` in the package's directory): `changeset publish` itself stops at the
+  // first chunk that fails, which is egon-orm alone.
+  const packedPlan = readJson(join(packDir, "publish-plan.json")).plan.flat();
   check(
-    refusal !== null,
-    `with PNPM_CONFIG_PROVENANCE=true, the publish failed for another reason:\n${refused}`,
+    packedPlan.length === published.length,
+    `the pack directory's plan has ${packedPlan.length} packages`,
   );
+  const refusals = [];
+  for (const release of packedPlan) {
+    const pkg = after.find((p) => p.manifest.name === release.name);
+    check(pkg !== undefined && release.tarball?.path !== undefined, `no tarball for ${release.name}`);
+    let refused;
+    try {
+      pnpm(
+        ["publish", join(packDir, release.tarball.path), "--json", "--access", "public", "--no-git-checks"],
+        join(clone, pkg.path),
+        { PNPM_CONFIG_PROVENANCE: "true" },
+      );
+    } catch (error) {
+      refused = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+    }
+    check(
+      refused !== undefined,
+      `${release.name}: with PNPM_CONFIG_PROVENANCE=true and no OIDC token, it was published`,
+    );
+    const code = /"code":\s*"([^"]+)"/.exec(refused)?.[1];
+    check(
+      code !== undefined && /^ERR_PNPM_(?:PROVENANCE|ID_TOKEN)_\w+$/.test(code),
+      `${release.name}: with PNPM_CONFIG_PROVENANCE=true, the publish failed for another reason:\n${refused}`,
+    );
+    refusals.push(`${release.name} ${code}`);
+  }
   for (const pkg of after.filter((p) => p.published)) {
     const response = await fetch(`${REGISTRY}${pkg.manifest.name.replace("/", "%2f")}`);
     check(response.status === 404, `${pkg.manifest.name} reached the registry without provenance`);
   }
-  ok(`with PNPM_CONFIG_PROVENANCE=true and no OIDC token, pnpm published nothing (${refusal[0]})`);
+  ok(
+    `with PNPM_CONFIG_PROVENANCE=true and no OIDC token, pnpm refused each of the ${refusals.length} packages and nothing reached the registry: ${refusals.join(", ")}`,
+  );
   const publishOutput = pnpm(["exec", "changeset", "publish", "--from-pack-dir", packDir], clone, {
     PNPM_CONFIG_PROVENANCE: "false",
   });
