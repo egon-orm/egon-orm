@@ -351,11 +351,12 @@ versioned. The versioning and support policy is in
    The workflow opens and updates that pull request with the `GITHUB_TOKEN`, and an event a
    workflow makes with that token starts no other workflow, except as GitHub's docs
    ([Triggering a workflow from a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow))
-   list: its `pull_request` runs are created waiting for approval. So `ci`, which `main`
-   requires, runs only after someone with write access selects **Approve workflows to run**
-   in the pull request, and again after each update of it. If that does not start them, run
-   `ci` on the branch by hand (`gh workflow run ci.yml --ref changeset-release/main`), or
-   close and reopen the pull request.
+   list: its `pull_request` runs are created waiting for approval. **The procedure** (owner
+   decision, 2026-11-09): in the pull request, select **Approve workflows to run**; `ci`,
+   which `main` requires, then runs. Do it again after each update of the pull request.
+   Fallbacks, if that does not start the runs: run `ci` on the branch by hand
+   (`gh workflow run ci.yml --ref changeset-release/main`), or close and reopen the pull
+   request.
 3. **Publish.** Merging the version pull request makes the publish plan non-empty
    (`changeset publish-plan`). The `pack` job, which holds no credential, builds, runs
    publint and attw, packs the packages (`changeset pack`), and then runs the consumer

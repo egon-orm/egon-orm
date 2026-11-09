@@ -113,13 +113,21 @@ edited." The page does not mention pnpm.
   switches the same way, so the step checks the pnpm that will publish. It runs only
   first-party shell and `node -p`; the job still runs no install script.
 - `scripts/check-release-config.mjs` (`pnpm lint`): `findWorkflowProblems` fails on an
-  `NPM_CONFIG_PROVENANCE` key anywhere in `release.yml`; within the `publish` job's block
-  only, on a missing `PNPM_CONFIG_PROVENANCE: "true"` (quoted or not), `id-token: write` or
-  environment `npm` (scalar or `name:`); on a missing `publish` job; and on a
-  `packageManager` that is not pnpm 12 or later (a `+sha512.…` suffix accepted). 11 unit
-  tests with a three-job fixture; the 5 added in review round 1 (keys in another job,
-  unquoted `true`, a hashed pin, the `name:` form, no `publish` job) fail on the round-0
-  checker. The checker reports two problems on the old `release.yml`.
+  `NPM_CONFIG_PROVENANCE` key anywhere in `release.yml`; on a missing `publish` job; on a
+  `packageManager` that is not pnpm 12 or later (a `+sha512.…` suffix accepted); and, reading
+  the `publish` job's own keys only, unless `PNPM_CONFIG_PROVENANCE: "true"` (quoted or not)
+  is a direct child of the job's `env:` or of the `env:` of the step whose `uses:` is
+  `changesets/action/publish@…`, unless `id-token: write` is a direct child of the job's
+  `permissions:`, and unless the job's `environment` key is `npm` (scalar or `name:`). A key
+  on a sibling step, in another job or inside a `run: |` script counts for nothing. 15 unit
+  tests with a three-job fixture whose `publish` job has an `npm token` step with a `run: |`
+  script. The round-1 tests (keys in another job, unquoted `true`, a hashed pin, the `name:`
+  form, no `publish` job) fail on the round-0 checker; the round-2 tests (the key on a
+  sibling step, the key in a `run: |` script, `id-token` and `environment` in a `run: |`
+  script) fail on the round-1 checker, and the job-level `env:` case passes on both. On the
+  real `release.yml`, moving the key to the `npm token` step or into the publisher step's
+  script is reported; moving it to the job's `env:` is accepted. The checker reports two
+  problems on the round-0 `release.yml`.
 - Workflow header comments rewritten (who publishes, how authentication works).
 
 ## 2. The NPM_TOKEN path
@@ -200,6 +208,11 @@ in the `npm` environment, so one more click on the version PR costs little, and 
 App, secret or new permission. Move to E only if releases become frequent enough that the
 click is a burden.
 
+**Owner decision, 2026-11-09: option A.** `ci` runs on the version PR when someone with
+write access selects "Approve workflows to run" in it (again after each update). Fallbacks:
+B (`gh workflow run ci.yml --ref changeset-release/main`) or C (close and reopen the PR). No
+GitHub App (option E) for now. CONTRIBUTING.md "Releases" step 2 describes A as the procedure.
+
 ## 4. The dry run
 
 `pnpm release:dry-run` now, before the real publish to verdaccio, runs `pnpm publish
@@ -228,10 +241,25 @@ into my scratch directory; Homebrew's pnpm 8 not used).
 | `pnpm release:dry-run` (round 1 script, this branch) | passed, 0.1.0; all 6 refused with `ERR_PNPM_PROVENANCE_UNSUPPORTED_PROVIDER` |
 | round 1 script on a simulated version PR (`pnpm version-packages` committed) | passed, 0.1.0, publishing the tree as it stands (main's script failed there: "there is no pending changeset") |
 | the same, after committing `## 0.1.0 (draft)` in `packages/zod/CHANGELOG.md` | failed: no non-empty "## 0.1.0" section |
-| `node --test scripts/check-release-config.test.mjs` | 23 passed (5 of them fail on the round-0 checker) |
-| `pnpm check` (round 1; includes `pnpm lint`) | passed: lint, typecheck, 6,645 unit tests, 608 type tests, build |
+| `node --test scripts/check-release-config.test.mjs` | 27 passed (round 2); 3 of the round-2 tests fail on the round-1 checker, plus one only because its message changed |
+| `pnpm check` (round 2; includes `pnpm lint`) | passed: lint, typecheck, 6,645 unit tests, 608 type tests, build |
 
 CI on the PR: see the PR's checks.
+
+## Review rounds
+
+- **Round 1** (CHANGES REQUESTED, 4 findings): the dry run versioned a made-up patch on a
+  tree with nothing pending; the provenance refusal tried only `egon-orm`; the workflow check
+  matched anywhere in the file and rejected an unquoted `true` and a hashed pin; the
+  publisher-step comment overstated what it detects. All fixed in `8cb193e` (§3, §4, §1).
+- **Round 2** (CHANGES REQUESTED, 1 finding): `findWorkflowProblems` accepted
+  `PNPM_CONFIG_PROVENANCE` anywhere in the `publish` job, including the `env:` of the
+  `npm token` step (which only that step sees) and a line inside a `run: |` script. Fixed:
+  the key counts only in the job's `env:` or in the `env:` of the `changesets/action/publish`
+  step, and `id-token: write` and `environment` are read the same way (as job keys, not text
+  anywhere in the job), which the reviewer did not ask for. Tests for the sibling step and
+  the `run: |` script, seen failing on the round-1 checker; the job-level `env:` case
+  accepted. Also recorded here: the owner's decision on option A (§3).
 
 ## Deviations, gaps and requests
 

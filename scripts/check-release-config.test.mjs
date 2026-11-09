@@ -172,11 +172,17 @@ describe("findWorkflowProblems", () => {
       "      contents: write",
       "      id-token: write # trusted publishing",
       "    steps:",
+      "      - name: npm token",
+      "        run: |",
+      "          echo token",
+      "        env:",
+      "          NPM_TOKEN: token-from-a-secret",
       "      - uses: changesets/action/publish@sha # v2.1.2",
       "        env:",
       env,
       "",
     ].join("\n");
+  const provenanceMissing = /publish job's env, or the env of its changesets\/action\/publish step/;
 
   test("accepts pnpm 12 with PNPM_CONFIG_PROVENANCE, id-token: write and the npm environment", () => {
     assert.deepEqual(findWorkflowProblems(workflow(), "pnpm@12.11.2"), []);
@@ -204,7 +210,49 @@ describe("findWorkflowProblems", () => {
     );
     const problems = findWorkflowProblems(elsewhere, "pnpm@12.11.2");
     assert.equal(problems.length, 1);
-    assert.match(problems[0], /publish job must set PNPM_CONFIG_PROVENANCE/);
+    assert.match(problems[0], provenanceMissing);
+  });
+
+  test("accepts PNPM_CONFIG_PROVENANCE in the publish job's own env", () => {
+    const jobLevel = workflow("").replace(
+      "    environment: npm",
+      '    environment: npm\n    env:\n      PNPM_CONFIG_PROVENANCE: "true"',
+    );
+    assert.deepEqual(findWorkflowProblems(jobLevel, "pnpm@12.11.2"), []);
+  });
+
+  test("does not count PNPM_CONFIG_PROVENANCE on a sibling step of the same job", () => {
+    const sibling = workflow("").replace(
+      "          NPM_TOKEN: token-from-a-secret",
+      '          NPM_TOKEN: token-from-a-secret\n          PNPM_CONFIG_PROVENANCE: "true"',
+    );
+    const problems = findWorkflowProblems(sibling, "pnpm@12.11.2");
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], provenanceMissing);
+  });
+
+  test("does not count PNPM_CONFIG_PROVENANCE written inside a run: | script", () => {
+    const script = workflow("").replace(
+      "          echo token",
+      '          echo token\n          PNPM_CONFIG_PROVENANCE: "true"',
+    );
+    const problems = findWorkflowProblems(script, "pnpm@12.11.2");
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], provenanceMissing);
+  });
+
+  test("does not count id-token: write or the environment written inside a run: | script", () => {
+    const script = workflow()
+      .replace("      id-token: write # trusted publishing\n", "")
+      .replace("    environment: npm\n", "")
+      .replace(
+        "          echo token",
+        "          echo token\n          id-token: write\n          environment: npm",
+      );
+    const problems = findWorkflowProblems(script, "pnpm@12.11.2");
+    assert.equal(problems.length, 2);
+    assert.match(problems[0], /id-token: write/);
+    assert.match(problems[1], /environment `npm`/);
   });
 
   test("does not count id-token: write or the npm environment in another job", () => {
