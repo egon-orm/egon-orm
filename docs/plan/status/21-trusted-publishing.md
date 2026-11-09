@@ -26,11 +26,22 @@ Labels: **verified** (I ran or read it), **cited** (a source says so; not exerci
 - npmjs.com shows each new configuration as **"Pending validation" with an explicit
   deadline**; the first one's is **2026-11-11 22:36 UTC** (as reported by the owner,
   2026-11-09; not seen by me).
-- **"Allowed actions" in the trusted publisher form:** `npm stage publish` is always allowed;
-  tick **Allow npm publish**, because the workflow publishes directly and without it a
-  publish is only staged and waits for approval on npmjs.com; leave **Allow npm dist-tag**
-  unticked (the workflow changes no dist-tag). From the owner's description of npm's form
-  (2026-11-09); not in the docs page I read, and not seen by me.
+- **"Allowed actions" in the trusted publisher form: tick Allow npm publish, leave Allow npm
+  dist-tag unticked.** The workflow publishes directly: `changeset publish` runs `pnpm
+  publish <tarball>` (`getPublishPlan.mjs:337-365`), which pnpm sends with `stage: false`
+  (pnpm `v12.11.2`, `pnpm/crates/cli/src/cli_args/publish.rs:128`, from review round 3);
+  only `pnpm stage publish` / `npm stage publish` stages. So without "Allow npm publish" npm
+  refuses the publish (it is not turned into a staged one), and since `egon-orm` is a chunk
+  of its own, a refused `egon-orm` publish stops the other five as well. Neither
+  @changesets/cli nor changesets/action runs a dist-tag command. **Cited**,
+  docs.npmjs.com/trusted-publishers (quoted in review round 3): "Allowed actions (optional):
+  npm stage publish is always allowed. Choose whether this trusted publisher can also publish
+  directly with npm publish or manage dist-tags with npm dist-tag. These permissions are
+  independent."; "Configurations created after Sep 03, 2026 are automatically set to allow
+  npm stage publish, and you can choose whether to also permit direct publishing with npm
+  publish."; "To allow a workflow to manage your package's distribution tags, select Allow
+  npm dist-tag for its trusted publisher configuration in your package settings. This option
+  is disabled by default. … Dist-tag access is independent of direct publishing."
 - **`changeset publish` stops at the first chunk that fails** (**verified**,
   `node_modules/@changesets/cli/dist/publish.mjs:168-171`, `break publishChunks`), and the
   publish plan puts `egon-orm` in a chunk of its own, ahead of the other five, which depend
@@ -249,7 +260,7 @@ into my scratch directory; Homebrew's pnpm 8 not used).
 | `pnpm release:dry-run` (round 1 script, this branch) | passed, 0.1.0; all 6 refused with `ERR_PNPM_PROVENANCE_UNSUPPORTED_PROVIDER` |
 | round 1 script on a simulated version PR (`pnpm version-packages` committed) | passed, 0.1.0, publishing the tree as it stands (main's script failed there: "there is no pending changeset") |
 | the same, after committing `## 0.1.0 (draft)` in `packages/zod/CHANGELOG.md` | failed: no non-empty "## 0.1.0" section |
-| `node --test scripts/check-release-config.test.mjs` | 27 passed (round 2); 3 of the round-2 tests fail on the round-1 checker, plus one only because its message changed |
+| `node --test scripts/check-release-config.test.mjs` | 28 passed (round 3); the round-3 override test fails on the round-2 checker; 3 of the round-2 tests fail on the round-1 checker, plus one only because its message changed |
 | `pnpm check` (round 2; includes `pnpm lint`) | passed: lint, typecheck, 6,645 unit tests, 608 type tests, build |
 
 CI on the PR: see the PR's checks.
@@ -268,6 +279,12 @@ CI on the PR: see the PR's checks.
   anywhere in the job), which the reviewer did not ask for. Tests for the sibling step and
   the `run: |` script, seen failing on the round-1 checker; the job-level `env:` case
   accepted. Also recorded here: the owner's decision on option A (§3).
+- **Round 3** (CHANGES REQUESTED, 2 findings): (A) a step-level `"false"` did not override a
+  job-level `"true"` in the checker; now the publish step's value decides when it sets the
+  key, else the job's. A test (job `"true"`, step `"false"` reported; the reverse accepted)
+  fails on the round-2 checker. (B) the consequence of not ticking "Allow npm publish" was
+  misstated as "staged"; npm refuses the publish. CONTRIBUTING.md and the owner-timing
+  section are corrected and now quote the docs.
 
 ## Deviations, gaps and requests
 

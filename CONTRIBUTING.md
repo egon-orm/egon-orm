@@ -381,10 +381,11 @@ package. npm's docs say a new trusted publisher must complete its first publish 
 days or it expires and must be created again
 ([Trusted publishing](https://docs.npmjs.com/trusted-publishers)), so set them up close to
 the first release; npmjs.com shows each new one as "Pending validation" with its deadline.
-Under "Allowed actions" in the trusted publisher form (`npm stage publish` is always
-allowed), tick **Allow npm publish**: the workflow publishes directly, and without it a
-publish is only staged and waits for approval on npmjs.com. Leave **Allow npm dist-tag**
-unticked; the workflow does not change dist-tags. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc` if one is
+Under "Allowed actions" in the trusted publisher form, tick **Allow npm publish**: the
+workflow publishes directly (`pnpm publish`), and without that permission npm refuses the
+publish (only `npm stage publish` is always allowed). A refused `egon-orm` publish also
+stops the other five, which `changeset publish` attempts only after it. Leave **Allow npm
+dist-tag** unticked; the workflow runs no dist-tag command. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc` if one is
 set; none is, and pnpm prefers the OIDC token anyway.
 
 `pnpm release:dry-run` (`scripts/release-dry-run.mjs`, also the `release dry run` CI job)

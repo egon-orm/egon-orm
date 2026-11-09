@@ -221,6 +221,21 @@ describe("findWorkflowProblems", () => {
     assert.deepEqual(findWorkflowProblems(jobLevel, "pnpm@12.11.2"), []);
   });
 
+  test("lets the publish step's PNPM_CONFIG_PROVENANCE override the job's", () => {
+    const override = workflow('          PNPM_CONFIG_PROVENANCE: "false"').replace(
+      "    environment: npm",
+      '    environment: npm\n    env:\n      PNPM_CONFIG_PROVENANCE: "true"',
+    );
+    const problems = findWorkflowProblems(override, "pnpm@12.11.2");
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], provenanceMissing);
+    const reverse = workflow('          PNPM_CONFIG_PROVENANCE: "true"').replace(
+      "    environment: npm",
+      '    environment: npm\n    env:\n      PNPM_CONFIG_PROVENANCE: "false"',
+    );
+    assert.deepEqual(findWorkflowProblems(reverse, "pnpm@12.11.2"), []);
+  });
+
   test("does not count PNPM_CONFIG_PROVENANCE on a sibling step of the same job", () => {
     const sibling = workflow("").replace(
       "          NPM_TOKEN: token-from-a-secret",

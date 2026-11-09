@@ -81,7 +81,8 @@ export function findReleaseProblems(config, packages) {
  * key would be ignored anywhere in the file. The other checks read the `publish` job's own
  * keys (from `  publish:` to the next job), since a key elsewhere does not reach the step that
  * publishes: `PNPM_CONFIG_PROVENANCE` only in the job's `env:` or in the `env:` of the
- * `changesets/action/publish` step, `id-token: write` only under the job's `permissions:`,
+ * `changesets/action/publish` step (the step's value, when it sets one, overrides the job's),
+ * `id-token: write` only under the job's `permissions:`,
  * and `environment` only as a key of the job. A line in a `run: |` script counts for none.
  */
 export function findWorkflowProblems(workflow, packageManager) {
@@ -100,9 +101,12 @@ export function findWorkflowProblems(workflow, packageManager) {
     problems.push(`${at}: there is no \`publish\` job.`);
     return problems;
   }
-  const provenance = /^\s*PNPM_CONFIG_PROVENANCE\s*:\s*(?:true|"true"|'true')\s*(?:#.*)?$/;
-  const publishEnv = [...childrenNamed(job, "env"), ...publishStepEnv(job)];
-  if (!publishEnv.some((line) => provenance.test(line)))
+  // A step's env overrides the job's: the publish step's value decides when it sets the key.
+  const provenanceKey = /^\s*PNPM_CONFIG_PROVENANCE\s*:/;
+  const provenanceTrue = /^\s*PNPM_CONFIG_PROVENANCE\s*:\s*(?:true|"true"|'true')\s*(?:#.*)?$/;
+  const stepSetting = publishStepEnv(job).find((line) => provenanceKey.test(line));
+  const setting = stepSetting ?? childrenNamed(job, "env").find((line) => provenanceKey.test(line));
+  if (setting === undefined || !provenanceTrue.test(setting))
     problems.push(
       `${at}: the publish job's env, or the env of its changesets/action/publish step, must set PNPM_CONFIG_PROVENANCE: "true".`,
     );
