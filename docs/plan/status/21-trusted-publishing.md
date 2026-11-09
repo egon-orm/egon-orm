@@ -23,6 +23,14 @@ Labels: **verified** (I ran or read it), **cited** (a source says so; not exerci
   job opens "Version packages", approve its `ci` runs, merge it, approve the `npm`
   environment's deployment. So create the six configurations only when ready to do all of
   that within 2 days.
+- npmjs.com shows each new configuration as **"Pending validation" with an explicit
+  deadline**; the first one's is **2026-11-11 22:36 UTC** (as reported by the owner,
+  2026-11-09; not seen by me).
+- **"Allowed actions" in the trusted publisher form:** `npm stage publish` is always allowed;
+  tick **Allow npm publish**, because the workflow publishes directly and without it a
+  publish is only staged and waits for approval on npmjs.com; leave **Allow npm dist-tag**
+  unticked (the workflow changes no dist-tag). From the owner's description of npm's form
+  (2026-11-09); not in the docs page I read, and not seen by me.
 - **`changeset publish` stops at the first chunk that fails** (**verified**,
   `node_modules/@changesets/cli/dist/publish.mjs:168-171`, `break publishChunks`), and the
   publish plan puts `egon-orm` in a chunk of its own, ahead of the other five, which depend
