@@ -15,7 +15,7 @@ export { toZod } from "./to-zod.js";
  * ```ts
  * import { VERSION } from "@egon-orm/zod";
  *
- * console.log(VERSION); // "0.0.0"
+ * console.log(VERSION); // "0.1.0"
  * ```
  */
-export const VERSION: string = "0.0.0";
+export const VERSION: string = "0.1.0";

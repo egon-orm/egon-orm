@@ -1,6 +1,6 @@
 {
   "name": "@egon-orm/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "The egon command for Egon ORM: migrations and development databases.",
   "license": "MIT",
   "author": "Casey Tickes",
