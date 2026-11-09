@@ -14,6 +14,9 @@
 //   `<!-- example: docs/site/examples/<file>#<region> -->`, and the block is that region,
 //   dedented and without trailing blank lines (as the docs site shows it). The region's
 //   file is type-checked with the site.
+// - The release workflow publishes as trusted publishing needs: pnpm 12 or later pinned,
+//   provenance asked for with PNPM_CONFIG_PROVENANCE (pnpm ignores NPM_CONFIG_PROVENANCE),
+//   `id-token: write`, and the environment `npm`.
 // - No tracked file outside docs/plan names the project's former name.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -68,6 +71,117 @@ export function findReleaseProblems(config, packages) {
       problems.push(`${at}: repository must be { url: "${REPOSITORY}", directory: "${dir}" }.`);
   }
   return problems;
+}
+
+/**
+ * Returns one message per problem with how the release workflow (`workflow`, the text of
+ * .github/workflows/release.yml) publishes, given the root manifest's `packageManager`.
+ * `changeset publish` runs `pnpm publish`, and pnpm 12 does the trusted publishing and the
+ * provenance itself and reads only `PNPM_CONFIG_*` variables: an `NPM_CONFIG_PROVENANCE`
+ * key would be ignored anywhere in the file. The other checks read the `publish` job's own
+ * keys (from `  publish:` to the next job), since a key elsewhere does not reach the step that
+ * publishes: `PNPM_CONFIG_PROVENANCE` only in the job's `env:` or in the `env:` of the
+ * `changesets/action/publish` step (the step's value, when it sets one, overrides the job's),
+ * `id-token: write` only under the job's `permissions:`,
+ * and `environment` only as a key of the job. A line in a `run: |` script counts for none.
+ */
+export function findWorkflowProblems(workflow, packageManager) {
+  const problems = [];
+  const at = ".github/workflows/release.yml";
+  // `corepack use` writes `pnpm@X.Y.Z+sha512.<hash>`; pnpm accepts both forms.
+  const pnpm = /^pnpm@(\d+)\.\d+\.\d+(?:\+\S+)?$/.exec(packageManager ?? "");
+  if (pnpm === null || Number(pnpm[1]) < 12)
+    problems.push(
+      `package.json: packageManager must pin pnpm 12 or later (it publishes, with trusted publishing), not ${packageManager}.`,
+    );
+  if (/^\s*NPM_CONFIG_PROVENANCE\s*:/m.test(workflow))
+    problems.push(`${at}: NPM_CONFIG_PROVENANCE is ignored by pnpm; set PNPM_CONFIG_PROVENANCE.`);
+  const job = publishJob(workflow);
+  if (job === undefined) {
+    problems.push(`${at}: there is no \`publish\` job.`);
+    return problems;
+  }
+  // A step's env overrides the job's: the publish step's value decides when it sets the key.
+  const provenanceKey = /^\s*PNPM_CONFIG_PROVENANCE\s*:/;
+  const provenanceTrue = /^\s*PNPM_CONFIG_PROVENANCE\s*:\s*(?:true|"true"|'true')\s*(?:#.*)?$/;
+  const stepSetting = publishStepEnv(job).find((line) => provenanceKey.test(line));
+  const setting = stepSetting ?? childrenNamed(job, "env").find((line) => provenanceKey.test(line));
+  if (setting === undefined || !provenanceTrue.test(setting))
+    problems.push(
+      `${at}: the publish job's env, or the env of its changesets/action/publish step, must set PNPM_CONFIG_PROVENANCE: "true".`,
+    );
+  if (!childrenNamed(job, "permissions").some((line) => /^\s*id-token\s*:\s*write\s*(?:#.*)?$/.test(line)))
+    problems.push(`${at}: the publish job needs \`id-token: write\` (trusted publishing and provenance).`);
+  const environment = keyLines(job).find((line) => /^\s*environment\s*:/.test(line));
+  const environmentName =
+    environment === undefined
+      ? undefined
+      : (/^\s*environment\s*:\s*([^\s#]+)\s*(?:#.*)?$/.exec(environment)?.[1] ??
+        directChildren(job, job.indexOf(environment))
+          .map((line) => /^\s*name\s*:\s*([^\s#]+)\s*(?:#.*)?$/.exec(line)?.[1])
+          .find((name) => name !== undefined));
+  if (environmentName !== "npm")
+    problems.push(
+      `${at}: the publish job must use the environment \`npm\`, which its trusted publishers name.`,
+    );
+  return problems;
+}
+
+/** The lines of the `publish` job of a workflow (`jobs:` children at two spaces), or undefined. */
+function publishJob(workflow) {
+  const lines = workflow.split("\n");
+  const start = lines.findIndex((line) => /^ {2}publish\s*:\s*(?:#.*)?$/.test(line));
+  if (start === -1) return undefined;
+  const end = lines.findIndex((line, index) => index > start && /^ {0,2}[^\s#]/.test(line));
+  return lines.slice(start + 1, end === -1 ? undefined : end);
+}
+
+const indentOf = (line) => /^ */.exec(line)[0].length;
+const significant = (line) => line.trim() !== "" && !line.trim().startsWith("#");
+
+/** The lines of `lines` at their least indentation: the keys of a mapping. */
+function keyLines(lines) {
+  const indent = Math.min(...lines.filter(significant).map(indentOf));
+  return lines.filter((line) => significant(line) && indentOf(line) === indent);
+}
+
+/** The significant lines one level under `lines[at]` (its direct children). */
+function directChildren(lines, at) {
+  const indent = indentOf(lines[at]);
+  const end = lines.findIndex((line, index) => index > at && significant(line) && indentOf(line) <= indent);
+  const nested = lines.slice(at + 1, end === -1 ? undefined : end).filter(significant);
+  if (nested.length === 0) return [];
+  const childIndent = Math.min(...nested.map(indentOf));
+  return nested.filter((line) => indentOf(line) === childIndent);
+}
+
+/** The direct children of the key `name` of the mapping `lines`, or none. */
+function childrenNamed(lines, name) {
+  const key = keyLines(lines).find((line) => new RegExp(`^\\s*${name}\\s*:\\s*(?:#.*)?$`).test(line));
+  return key === undefined ? [] : directChildren(lines, lines.indexOf(key));
+}
+
+/** The direct children of the `env:` of the job's `changesets/action/publish` step(s). */
+function publishStepEnv(job) {
+  const stepsKey = keyLines(job).find((line) => /^\s*steps\s*:\s*(?:#.*)?$/.test(line));
+  if (stepsKey === undefined) return [];
+  const start = job.indexOf(stepsKey);
+  const indent = indentOf(stepsKey);
+  const end = job.findIndex((line, index) => index > start && significant(line) && indentOf(line) <= indent);
+  const steps = job.slice(start + 1, end === -1 ? undefined : end);
+  const dashes = steps.filter((line) => /^\s*- /.test(line));
+  if (dashes.length === 0) return [];
+  const dashIndent = Math.min(...dashes.map(indentOf));
+  const starts = steps.flatMap((line, index) =>
+    indentOf(line) === dashIndent && /^\s*- /.test(line) ? [index] : [],
+  );
+  return starts.flatMap((from, n) => {
+    // The step as a mapping: its first key moves from after the dash to the keys' column.
+    const step = steps.slice(from, starts[n + 1]);
+    step[0] = step[0].replace(/^(\s*)- /, "$1  ");
+    const uses = keyLines(step).some((line) => /^\s*uses\s*:\s*changesets\/action\/publish@/.test(line));
+    return uses ? childrenNamed(step, "env") : [];
+  });
 }
 
 /** `text` without the indentation its lines share. */
@@ -144,6 +258,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
   const problems = [
     ...findReleaseProblems(config, packages),
+    ...findWorkflowProblems(
+      readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8"),
+      JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).packageManager,
+    ),
     ...readmes,
     ...findFormerName(tracked, (file) => readFileSync(join(ROOT, file), "latin1")),
   ];

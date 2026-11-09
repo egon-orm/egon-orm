@@ -20,10 +20,23 @@ name: Release
 # publishes nothing and needs no secret until then. `pnpm release:dry-run` (and the
 # `release dry run` job of ci.yml) runs the same commands against a local registry.
 #
-# npm authentication: trusted publishing (OIDC, the `id-token: write` permission below)
-# once each package is configured on npmjs.com with this repository and this workflow file;
-# until then (the first publish of a package that does not exist yet), an NPM_TOKEN secret,
-# which the job writes to ~/.npmrc only when it is set.
+# Who publishes: the action runs the workspace's `changeset publish`, which, in a pnpm
+# workspace, runs `pnpm publish <tarball>` for each package. pnpm 12 publishes by itself (it
+# does not call the npm CLI), so the npm CLI's version does not matter here; the `publish`
+# job checks that the pnpm that runs in this workspace is the one package.json pins.
+#
+# npm authentication: trusted publishing (OIDC). Each package has this repository, this
+# workflow file (release.yml) and the environment `npm` as its trusted publisher on
+# npmjs.com; pnpm exchanges the job's OIDC token (`id-token: write`) for a publish token,
+# and prefers it to any token in ~/.npmrc. There is no long-lived npm token: the owner
+# publishes a 0.0.1 placeholder of each package by hand and sets its trusted publisher before
+# RELEASE is turned on, so no publish from here creates a package. The NPM_TOKEN step below
+# is a leftover that does nothing while the secret is unset.
+#
+# The `version` job opens its pull request with the GITHUB_TOKEN. GitHub's docs say the
+# `pull_request` runs of such a pull request wait in an approval-required state, so `ci`
+# runs once someone with write access selects "Approve workflows to run" in it
+# (CONTRIBUTING.md, "Releases").
 on:
   push:
     branches: [main]
@@ -111,8 +124,8 @@ jobs:
     if: needs.mode.outputs.mode == 'publish'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # Required reviewers on this environment make every publish wait for an approval, and its
-    # deployment branches should be limited to main.
+    # The environment requires the owner's approval for every publish and deploys from main
+    # only. Its name is part of each package's trusted publisher on npmjs.com.
     environment: npm
     env:
       # Whether the secret is set (a secret cannot be tested in a step's `if`).
@@ -133,6 +146,20 @@ jobs:
           cache: false
           install: false
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      # pnpm does the trusted publishing and the provenance itself; the release dry run checks
+      # that the pinned pnpm honours PNPM_CONFIG_PROVENANCE. Fail before publishing unless the
+      # pnpm that runs in this workspace (after any switch to the pinned version) is the one
+      # package.json pins (a `+sha512.…` suffix on the pin is ignored).
+      - name: check the publisher
+        run: |
+          expected="$(node -p 'require("./package.json").packageManager.replace(/\+.*$/, "")')"
+          actual="pnpm@$(pnpm --version)"
+          echo "publisher: ${actual}"
+          if [ "${actual}" != "${expected}" ]; then
+            echo "::error::the pnpm in this workspace is ${actual}; package.json pins ${expected}"
+            exit 1
+          fi
+      # Not used: there is no NPM_TOKEN secret (trusted publishing). Harmless while it is unset.
       - name: npm token (only when the NPM_TOKEN secret is set)
         if: env.HAS_NPM_TOKEN == 'true'
         run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
@@ -146,4 +173,6 @@ jobs:
           pack-dir-artifact-id: ${{ needs.pack.outputs.pack-dir }}
           create-github-releases: true
         env:
-          NPM_CONFIG_PROVENANCE: "true"
+          # pnpm reads PNPM_CONFIG_*, not NPM_CONFIG_* (which it ignores). Provenance is
+          # required, not left to pnpm's detection: a publish that cannot attach it fails.
+          PNPM_CONFIG_PROVENANCE: "true"
