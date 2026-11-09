@@ -7,6 +7,7 @@ import {
   findFormerName,
   findReadmeProblems,
   findReleaseProblems,
+  findWorkflowProblems,
 } from "./check-release-config.mjs";
 
 const NAMES = ["egon-orm", "@egon-orm/postgres"];
@@ -146,5 +147,69 @@ describe("findReadmeProblems", () => {
 
   test("dedent removes the shared indentation only", () => {
     assert.equal(dedent("  a\n\n    b"), "a\n\n  b");
+  });
+});
+
+describe("findWorkflowProblems", () => {
+  const workflow = (env = '          PNPM_CONFIG_PROVENANCE: "true"') =>
+    [
+      "  publish:",
+      "    environment: npm",
+      "    permissions:",
+      "      contents: write",
+      "      id-token: write # trusted publishing",
+      "    steps:",
+      "      - uses: changesets/action/publish@sha # v2.1.2",
+      "        env:",
+      env,
+      "",
+    ].join("\n");
+
+  test("accepts pnpm 12 with PNPM_CONFIG_PROVENANCE, id-token: write and the npm environment", () => {
+    assert.deepEqual(findWorkflowProblems(workflow(), "pnpm@12.11.2"), []);
+  });
+
+  test("rejects NPM_CONFIG_PROVENANCE, which pnpm ignores", () => {
+    const problems = findWorkflowProblems(
+      workflow('          NPM_CONFIG_PROVENANCE: "true"'),
+      "pnpm@12.11.2",
+    );
+    assert.equal(problems.length, 2);
+    assert.match(problems[0], /NPM_CONFIG_PROVENANCE is ignored/);
+    assert.match(problems[1], /PNPM_CONFIG_PROVENANCE: "true"/);
+  });
+
+  test("rejects provenance turned off", () => {
+    const problems = findWorkflowProblems(
+      workflow('          PNPM_CONFIG_PROVENANCE: "false"'),
+      "pnpm@12.11.2",
+    );
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], /PNPM_CONFIG_PROVENANCE: "true"/);
+  });
+
+  test("does not take a comment that names NPM_CONFIG_PROVENANCE for a key", () => {
+    const commented = workflow().replace(
+      "        env:",
+      "        # not NPM_CONFIG_PROVENANCE: pnpm ignores it\n        env:",
+    );
+    assert.deepEqual(findWorkflowProblems(commented, "pnpm@12.11.2"), []);
+  });
+
+  test("rejects a missing id-token permission or another environment", () => {
+    const problems = findWorkflowProblems(
+      workflow()
+        .replace("      id-token: write # trusted publishing\n", "")
+        .replace("environment: npm", "environment: release"),
+      "pnpm@12.11.2",
+    );
+    assert.equal(problems.length, 2);
+    assert.match(problems[0], /id-token: write/);
+    assert.match(problems[1], /environment `npm`/);
+  });
+
+  test("rejects a pnpm older than 12, another package manager, or none", () => {
+    for (const packageManager of ["pnpm@10.18.0", "npm@11.6.0", undefined])
+      assert.match(findWorkflowProblems(workflow(), packageManager)[0] ?? "", /pnpm 12 or later/);
   });
 });

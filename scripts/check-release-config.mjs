@@ -14,6 +14,9 @@
 //   `<!-- example: docs/site/examples/<file>#<region> -->`, and the block is that region,
 //   dedented and without trailing blank lines (as the docs site shows it). The region's
 //   file is type-checked with the site.
+// - The release workflow publishes as trusted publishing needs: pnpm 12 or later pinned,
+//   provenance asked for with PNPM_CONFIG_PROVENANCE (pnpm ignores NPM_CONFIG_PROVENANCE),
+//   `id-token: write`, and the environment `npm`.
 // - No tracked file outside docs/plan names the project's former name.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -67,6 +70,34 @@ export function findReleaseProblems(config, packages) {
     if (manifest.repository?.url !== REPOSITORY || manifest.repository?.directory !== dir)
       problems.push(`${at}: repository must be { url: "${REPOSITORY}", directory: "${dir}" }.`);
   }
+  return problems;
+}
+
+/**
+ * Returns one message per problem with how the release workflow (`workflow`, the text of
+ * .github/workflows/release.yml) publishes, given the root manifest's `packageManager`.
+ * `changeset publish` runs `pnpm publish`, and pnpm 12 does the trusted publishing and the
+ * provenance itself and reads only `PNPM_CONFIG_*` variables: an `NPM_CONFIG_PROVENANCE`
+ * key would be ignored.
+ */
+export function findWorkflowProblems(workflow, packageManager) {
+  const problems = [];
+  const at = ".github/workflows/release.yml";
+  const pnpm = /^pnpm@(\d+)\.\d+\.\d+$/.exec(packageManager ?? "");
+  if (pnpm === null || Number(pnpm[1]) < 12)
+    problems.push(
+      `package.json: packageManager must pin pnpm 12 or later (it publishes, with trusted publishing), not ${packageManager}.`,
+    );
+  if (/^\s*NPM_CONFIG_PROVENANCE\s*:/m.test(workflow))
+    problems.push(`${at}: NPM_CONFIG_PROVENANCE is ignored by pnpm; set PNPM_CONFIG_PROVENANCE.`);
+  if (!/^\s*PNPM_CONFIG_PROVENANCE\s*:\s*"true"\s*$/m.test(workflow))
+    problems.push(`${at}: the publish step must set PNPM_CONFIG_PROVENANCE: "true".`);
+  if (!/^\s*id-token\s*:\s*write\b/m.test(workflow))
+    problems.push(`${at}: the publish job needs \`id-token: write\` (trusted publishing and provenance).`);
+  if (!/^\s*environment\s*:\s*npm\s*$/m.test(workflow))
+    problems.push(
+      `${at}: the publish job must use the environment \`npm\`, which its trusted publishers name.`,
+    );
   return problems;
 }
 
@@ -144,6 +175,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
   const problems = [
     ...findReleaseProblems(config, packages),
+    ...findWorkflowProblems(
+      readFileSync(join(ROOT, ".github/workflows/release.yml"), "utf8"),
+      JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).packageManager,
+    ),
     ...readmes,
     ...findFormerName(tracked, (file) => readFileSync(join(ROOT, file), "latin1")),
   ];

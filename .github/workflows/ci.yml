@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # A manual run on a branch, as a fallback for the release workflow's "Version packages"
+  # pull request if its approval-required runs cannot be started (CONTRIBUTING.md, "Releases").
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

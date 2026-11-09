@@ -12,8 +12,10 @@
 //    `changeset publish-plan` (what select-mode runs to choose "publish") must list every
 //    package at the new version; `changeset pack --from-publish-plan` (the pack job) packs
 //    them; `changeset publish --from-pack-dir` (the publish job) publishes the tarballs.
-//    Provenance is off: it needs the OIDC token of a GitHub Actions run. Every package must
-//    then be in the registry at the new version, with no `workspace:` range left in its
+//    First with provenance on (PNPM_CONFIG_PROVENANCE, as release.yml sets it): with no OIDC
+//    token to sign it, every package must be refused before anything is uploaded. Then with
+//    provenance off, since it needs the OIDC token of a GitHub Actions run (as trusted
+//    publishing does, which verdaccio cannot exercise). Every package must then be in the registry at the new version, with no `workspace:` range left in its
 //    manifest and its README as the readme; a git tag `<name>@<version>` must exist for
 //    each; and the publish plan must be empty (select-mode's "none").
 // 4. Release notes: each package's CHANGELOG section for the version, which the publish job
@@ -276,8 +278,31 @@ try {
   console.log(
     pnpm(["exec", "changeset", "pack", "--from-publish-plan", plan, "--out-dir", packDir], clone).trim(),
   );
+  // release.yml asks for provenance with PNPM_CONFIG_PROVENANCE (pnpm ignores
+  // NPM_CONFIG_PROVENANCE). With it on and no OIDC token to sign with, the publish must fail
+  // for every package before any upload; a pnpm that stopped reading the variable would
+  // publish here instead.
+  let refused;
+  try {
+    pnpm(["exec", "changeset", "publish", "--from-pack-dir", packDir], clone, {
+      PNPM_CONFIG_PROVENANCE: "true",
+    });
+  } catch (error) {
+    refused = `${error.stdout ?? ""}${error.stderr ?? ""}`;
+  }
+  check(refused !== undefined, "with PNPM_CONFIG_PROVENANCE=true and no OIDC token, the publish succeeded");
+  const refusal = /ERR_PNPM_(?:PROVENANCE|ID_TOKEN)_\w+/.exec(refused);
+  check(
+    refusal !== null,
+    `with PNPM_CONFIG_PROVENANCE=true, the publish failed for another reason:\n${refused}`,
+  );
+  for (const pkg of after.filter((p) => p.published)) {
+    const response = await fetch(`${REGISTRY}${pkg.manifest.name.replace("/", "%2f")}`);
+    check(response.status === 404, `${pkg.manifest.name} reached the registry without provenance`);
+  }
+  ok(`with PNPM_CONFIG_PROVENANCE=true and no OIDC token, pnpm published nothing (${refusal[0]})`);
   const publishOutput = pnpm(["exec", "changeset", "publish", "--from-pack-dir", packDir], clone, {
-    NPM_CONFIG_PROVENANCE: "false",
+    PNPM_CONFIG_PROVENANCE: "false",
   });
   console.log(publishOutput.trim());
 

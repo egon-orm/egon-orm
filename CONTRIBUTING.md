@@ -342,31 +342,53 @@ versioned. The versioning and support policy is in
    with the bump the policy calls for (before 1.0: `minor` for a breaking change, `patch`
    for everything else). A breaking change also adds a section to `reference/upgrading.md`.
 2. **The version pull request.** `.github/workflows/release.yml` runs on every push to
-   `main`. While changesets are pending it opens or updates "Version packages", made by
-   `pnpm version-packages`: every package's new version, its `CHANGELOG.md` entry, and the
-   `VERSION` constants (`scripts/sync-version.mjs`). Before merging it, write the release's
-   entry in the root [`CHANGELOG.md`](CHANGELOG.md) for people (what changed and why, with
-   links), and replace "unreleased" with the date.
+   `main`. While changesets are pending it opens or updates "Version packages" (branch
+   `changeset-release/main`), made by `pnpm version-packages`: every package's new version,
+   its `CHANGELOG.md` entry, and the `VERSION` constants (`scripts/sync-version.mjs`). Before
+   merging it, write the release's entry in the root [`CHANGELOG.md`](CHANGELOG.md) for
+   people (what changed and why, with links), and replace "unreleased" with the date.
+
+   The workflow opens and updates that pull request with the `GITHUB_TOKEN`, and an event a
+   workflow makes with that token starts no other workflow, except as GitHub's docs
+   ([Triggering a workflow from a workflow](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow))
+   list: its `pull_request` runs are created waiting for approval. So `ci`, which `main`
+   requires, runs only after someone with write access selects **Approve workflows to run**
+   in the pull request, and again after each update of it. If that does not start them, run
+   `ci` on the branch by hand (`gh workflow run ci.yml --ref changeset-release/main`), or
+   close and reopen the pull request.
 3. **Publish.** Merging the version pull request makes the publish plan non-empty
    (`changeset publish-plan`). The `pack` job, which holds no credential, builds, runs
    publint and attw, packs the packages (`changeset pack`), and then runs the consumer
-   matrix, so that nothing it installs can touch what was packed. Then
-   the `publish` job (after an approval, if the `npm` environment has required reviewers)
-   publishes those tarballs with npm provenance (`changeset publish --from-pack-dir`). It
-   runs no install script. It pushes a tag `<name>@<version>` per package and creates a
-   GitHub release per tag from its `CHANGELOG.md` section.
+   matrix, so that nothing it installs can touch what was packed. Then, after the owner
+   approves the `npm` environment's deployment, the `publish` job publishes those tarballs
+   (`changeset publish --from-pack-dir`, which runs `pnpm publish` for each) with npm
+   provenance, which it requires (`PNPM_CONFIG_PROVENANCE`; pnpm ignores
+   `NPM_CONFIG_PROVENANCE`). It runs no install script. It pushes a tag `<name>@<version>`
+   per package and creates a GitHub release per tag from its `CHANGELOG.md` section.
 
 The workflow does nothing until the repository variable `RELEASE` is `on`, and runs only
-for `main`. Authentication
-to npm is trusted publishing (OIDC) once each package has this repository and
-`release.yml` as its trusted publisher on npmjs.com; the first publish of a package that
-does not exist yet needs an `NPM_TOKEN` secret, which the job uses only when it is set.
+for `main`.
+
+**Authentication to npm is trusted publishing (OIDC); there is no npm token.** pnpm 12
+publishes by itself, without the npm CLI, and exchanges the job's OIDC token for a publish
+token (so npm's requirement of npm 11.5.1 for its own CLI does not apply; the job checks
+that the pnpm on PATH is the one `packageManager` pins). The first version of each package
+was a `0.0.1` placeholder the owner published by hand; each package then has, as its
+trusted publisher on npmjs.com, the repository `egon-orm/egon-orm`, the workflow
+`release.yml` and the environment `npm`, so no publish from the workflow creates a
+package. npm's docs say a new trusted publisher must complete its first publish within 2
+days or it expires and must be created again
+([Trusted publishing](https://docs.npmjs.com/trusted-publishers)), so set them up close to
+the first release. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc` if one is
+set; none is, and pnpm prefers the OIDC token anyway.
 
 `pnpm release:dry-run` (`scripts/release-dry-run.mjs`, also the `release dry run` CI job)
 runs steps 2 and 3 against a local verdaccio registry from a clean clone of `HEAD`: it
-versions, checks the publish plan, packs, publishes from the pack directory, checks the
-published manifests (no `workspace:` ranges, the README) and that the plan is then empty,
-the tags and the release notes, installs the packages from that registry with npm and loads
-every entry point, then checks that a patch to one package versions all of them. It
-publishes nothing anywhere else and needs no secret; provenance is off, since it needs a
-GitHub Actions token. `--keep` leaves the temporary directory.
+versions, checks the publish plan, packs, checks that a publish with
+`PNPM_CONFIG_PROVENANCE=true` and no OIDC token is refused before anything is uploaded,
+publishes from the pack directory with provenance off, checks the published manifests (no
+`workspace:` ranges, the README) and that the plan is then empty, the tags and the release
+notes, installs the packages from that registry with npm and loads every entry point, then
+checks that a patch to one package versions all of them. It publishes nothing anywhere else
+and needs no secret. It cannot exercise trusted publishing or provenance, which need npm and
+a GitHub Actions OIDC token. `--keep` leaves the temporary directory.
