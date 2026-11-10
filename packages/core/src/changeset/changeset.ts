@@ -680,7 +680,7 @@ export class Changeset<
    * cast(User, params, ["email"]).pipe(normalizeEmail);
    * ```
    */
-  pipe<R>(fn: (changeset: this) => R): R {
+  pipe<R>(fn: (changeset: NoInfer<this>) => R): R {
     return fn(this);
   }
 

@@ -204,7 +204,16 @@ type ParamsOfSource<Src> = Src extends AnySchema
 // Type-level helpers
 // ---------------------------------------------------------------------------
 
-/** A condition: what `where`, `having` and `on` callbacks return. */
+/**
+ * A condition: what `where`, `having` and `on` callbacks return.
+ *
+ * The bindings those callbacks (and `distinct`, `groupBy`, `orderBy`) receive are declared
+ * `NoInfer<…>`. Without it, inferring the call's type arguments compares the callback's
+ * parameter with the declared one, and that walks from each binding into its schema class,
+ * every static member of the class and every association's target: the editor then
+ * re-checks every schema reachable through associations after each edit. Nothing is
+ * inferred from the bindings, so the result types are the same.
+ */
 type Condition = Expr<boolean | null, SomeParams>;
 
 /**
@@ -1639,7 +1648,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     this: Q0,
     source: Src,
     alias: A2 & NewAlias<A2, B>,
-    on: (bindings: B & { readonly [K in A2]: BindingOfSource<Src> }) => X,
+    on: (bindings: NoInfer<B & { readonly [K in A2]: BindingOfSource<Src> }>) => X,
   ): Next<
     Q0,
     BindingsOf<Q0> & { readonly [K in A2]: BindingOfSource<Src> },
@@ -1664,7 +1673,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     this: Q0,
     source: Src,
     alias: A2 & NewAlias<A2, B>,
-    on: (bindings: B & { readonly [K in A2]: NullableBinding<BindingOfSource<Src>> }) => X,
+    on: (bindings: NoInfer<B & { readonly [K in A2]: NullableBinding<BindingOfSource<Src>> }>) => X,
   ): Next<
     Q0,
     BindingsOf<Q0> & { readonly [K in A2]: NullableBinding<BindingOfSource<Src>> },
@@ -1690,7 +1699,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     this: Q0,
     source: Src,
     alias: A2 & NewAlias<A2, B>,
-    on: (bindings: NullableAll<B> & { readonly [K in A2]: BindingOfSource<Src> }) => X,
+    on: (bindings: NoInfer<NullableAll<B> & { readonly [K in A2]: BindingOfSource<Src> }>) => X,
   ): Next<
     Q0,
     NullableAll<BindingsOf<Q0>> & { readonly [K in A2]: BindingOfSource<Src> },
@@ -1715,7 +1724,9 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     this: Q0,
     source: Src,
     alias: A2 & NewAlias<A2, B>,
-    on: (bindings: NullableAll<B> & { readonly [K in A2]: NullableBinding<BindingOfSource<Src>> }) => X,
+    on: (
+      bindings: NoInfer<NullableAll<B> & { readonly [K in A2]: NullableBinding<BindingOfSource<Src>> }>,
+    ) => X,
   ): Next<
     Q0,
     NullableAll<BindingsOf<Q0>> & { readonly [K in A2]: NullableBinding<BindingOfSource<Src>> },
@@ -1773,7 +1784,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     from: F,
     assoc: K,
     alias: A2 & NewAlias<A2, B>,
-    on?: (bindings: B & { readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>> }) => X,
+    on?: (bindings: NoInfer<B & { readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>> }>) => X,
   ): Next<
     Q0,
     BindingsOf<Q0> & { readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>> },
@@ -1805,9 +1816,11 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     assoc: K,
     alias: A2 & NewAlias<A2, B>,
     on?: (
-      bindings: B & {
-        readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>, true>;
-      },
+      bindings: NoInfer<
+        B & {
+          readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>, true>;
+        }
+      >,
     ) => X,
   ): Next<
     Q0,
@@ -1842,7 +1855,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
    * a field the root binding has no column for or holds `undefined`.
    */
   where(conditions: RootWhere<B, A>): this;
-  where<X extends Condition>(fn: (bindings: B) => X): AddParams<this, ParamsOf<X>>;
+  where<X extends Condition>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOf<X>>;
   where(input: unknown): unknown {
     return this.#bool(WHERES, "and", "where", input);
   }
@@ -1859,7 +1872,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
    * @throws QueryError as {@link where}.
    */
   orWhere(conditions: RootWhere<B, A>): this;
-  orWhere<X extends Condition>(fn: (bindings: B) => X): AddParams<this, ParamsOf<X>>;
+  orWhere<X extends Condition>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOf<X>>;
   orWhere(input: unknown): unknown {
     return this.#bool(WHERES, "or", "orWhere", input);
   }
@@ -1874,7 +1887,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
    *
    * @throws QueryError when the query has no `groupBy`, or the callback does not return a condition.
    */
-  having<X extends Condition>(fn: (bindings: B) => X): AddParams<this, ParamsOf<X>> {
+  having<X extends Condition>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOf<X>> {
     if (this.ast.groupBys.length === 0) {
       throw new QueryError(
         "query.havingWithoutGroupBy",
@@ -2003,7 +2016,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
    * @throws QueryError when the query already has a `distinct`, or the callback does not return expressions.
    */
   distinct(): this;
-  distinct<X extends ExprList>(fn: (bindings: B) => X): AddParams<this, ParamsOfList<X>>;
+  distinct<X extends ExprList>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOfList<X>>;
   distinct(fn?: unknown): unknown {
     if (this.ast.distinct !== undefined) {
       throw new QueryError(
@@ -2058,7 +2071,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
    *
    * @throws QueryError when the callback does not return expressions.
    */
-  groupBy<X extends ExprList>(fn: (bindings: B) => X): AddParams<this, ParamsOfList<X>> {
+  groupBy<X extends ExprList>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOfList<X>> {
     const items = expressions(run("groupBy", fn, this.#scope.arg), "groupBy");
     const nodes = this.ast.groupBys.slice();
     let params: readonly unknown[] = NONE;
@@ -2088,7 +2101,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
    * @throws QueryError when the callback does not return expressions or order items.
    */
   orderBy<X extends OrderItem | readonly OrderItem[] | readonly []>(
-    fn: (bindings: B) => X & WindowCheck<OrderLeaves<X>, W>,
+    fn: (bindings: NoInfer<B>) => X & WindowCheck<OrderLeaves<X>, W>,
   ): AddParams<this, ParamsOfList<X>> {
     const items = orderItems(run("orderBy", fn, this.#scope.arg), "orderBy");
     for (const item of items) checkWindow("orderBy", item.node.expr, this.ast.windows);
