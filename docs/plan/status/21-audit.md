@@ -799,7 +799,7 @@ Everything here would be checked the same way as this report: re-verified, with 
 
 1. **F4 fixed** (owner decision): `ConstraintError` and `DatabaseError` get a custom inspect
    that leaves out `detail` and shows the cause on one line; `secrets.itest.ts:210-211` flips
-   to `not.toContain(SECRET)`. Done in #PRNUM (on every Egon error; Node's uncaught-error
+   to `not.toContain(SECRET)`. Done in #81 (on every Egon error; Node's uncaught-error
    printer is outside it, see `status/21-gate-inspect-errors.md`).
 2. **Editor completions under 200 ms on the 200-schema project** in every connected topology
    (chain, tree, hub), measured with `scripts/type-health/measure.mjs`, and every

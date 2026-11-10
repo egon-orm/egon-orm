@@ -1,6 +1,6 @@
 # 1.0 gate item 1: inspect output of errors (security finding F4), status
 
-Branch `step/21-gate-inspect-errors`, 2026-11-10, from `main` at `a118ddf`. PR #PRNUM.
+Branch `step/21-gate-inspect-errors`, 2026-11-10, from `main` at `a118ddf`. PR #81.
 Background: `status/21-security.md` (F4), `status/21-audit.md` §4.1 and §8 item 1.
 
 Labels: **verified** (I ran it), **measured** (a number I took), **unverified** (not checked).
