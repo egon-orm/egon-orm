@@ -7,7 +7,7 @@ something you have to act on, its entry links to a section of the
 the versioning and support policy. Each package's own `CHANGELOG.md` lists the changes
 recorded for it.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-10)
 
 The first release: a TypeScript ORM for Postgres, SQLite and MySQL with schemas,
 changesets, composable queries and a repo, typed end to end with no code generation.

@@ -1,6 +1,7 @@
 # Roadmap
 
-Egon ORM is under construction: nothing is published to npm yet.
+Egon ORM 0.1.0 is on npm. Before 1.0 a minor release can make breaking changes; see
+[Upgrading](/reference/upgrading).
 
 ## Built
 
@@ -13,17 +14,11 @@ Egon ORM is under construction: nothing is published to npm yet.
 | Postgres, SQLite and MySQL adapters | [Adapters](/guide/adapters), [Dialect support](/reference/dialect-support) |
 | Migrations, their runner and the `egon` command | [Migrations](/guide/migrations), [CLI](/reference/cli) |
 
-## Before the first release
-
-| Work | Notes |
-|---|---|
-| Performance | Benchmarks against the raw drivers. No numbers are published until then. |
-| Release hardening | Publishing the packages, `@egon-orm/cli` included, versioning and the changelog. |
-
-## Planned after the first release
+## Planned
 
 | Feature | Notes |
 |---|---|
+| Performance | Benchmarks against the raw drivers. No numbers are published until then. |
 | Faster editor completions in large models | After an edit, completions inside a query callback take about 40 ms plus 1.1–1.2 ms per schema reachable through associations, so they pass 200 ms at about 140–170 connected schemas on the machine measured, sooner on slower ones. The likely cause is that the association and preload types infer every static member of each reachable schema; the plan is to make them read the schema's association metadata and expand only where `preload` is used. Until then, declaring the return type of `changeset` methods lowers the cost (to about 114 ms at 200 schemas in one measurement); include in it the error keys the validations add, as in `Changeset<typeof User, boolean, "passwordConfirmation">`, or `errorMessages()` loses them. |
 | Lateral joins | `joinLateral`, `leftJoinLateral`. |
 | `VALUES` lists as a query source | `from(values(...), "v")`. |

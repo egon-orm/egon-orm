@@ -1,7 +1,8 @@
 # Introduction
 
-::: warning Work in progress
-Egon ORM is under construction and nothing is published to npm yet.
+::: info 0.x release
+Egon ORM 0.1.0 is on npm. Before 1.0 a minor release can make breaking changes; see
+[Upgrading](/reference/upgrading).
 :::
 
 Egon ORM is a TypeScript ORM for Postgres, SQLite and MySQL. It keeps four things apart
@@ -66,7 +67,7 @@ What it costs, honestly:
 - **Results to check.** `insert` returns a result you must look at, or use
   `insertOrThrow`.
 - **No identity map.** The same record loaded twice is two objects.
-- **Young.** Nothing is published yet, the ecosystem is small, and SQLite and MySQL have
+- **Young.** The first release is 0.1.0, the ecosystem is small, and SQLite and MySQL have
   [documented gaps](/reference/dialect-support).
 
 ## What to expect if you come from another ORM
