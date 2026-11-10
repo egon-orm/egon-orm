@@ -15,7 +15,7 @@ injection: every site that writes SQL text was read and holds.
 | F1 | Medium | The connection string and password were reachable by `util.inspect` (depth > 2) of a repo, an adapter or a transaction | **Fixed** |
 | F2 | Low | `castAssoc` / `putAssoc` matched items to loaded children with one scan per item: quadratic in attacker-controlled input | **Fixed** |
 | F3 | Low | `castAssoc` read an item's key through the prototype chain | **Fixed** |
-| F4 | Medium | A redacted value can appear in `util.inspect` of an error (and of a query event holding it), through the database's own text: `ConstraintError.detail`, `error.cause` | **Owner's decision**; documented in SECURITY.md |
+| F4 | Medium | A redacted value can appear in `util.inspect` of an error (and of a query event holding it), through the database's own text: `ConstraintError.detail`, `error.cause` | **Fixed** for `util.inspect`, `console.log` and `util.format` (1.0 gate item 1, PR #PRNUM, `status/21-gate-inspect-errors.md`): every Egon error's custom inspect hides `detail` and shows the cause chain as names and codes. Not fixable: Node's printer of an uncaught error skips custom inspect; documented in SECURITY.md |
 | F5 | Low | A changeset without a schema class has no `codegen` opt-out: its `validate()` tries `new Function` | **Owner's decision**; documented |
 | F6 | Info | A self-recursive changeset function over a very deep embed ends in a stack overflow | Documented |
 | F7 | Info | `cast()` on an existing changeset copies the params: linear in the number of keys sent | Documented |

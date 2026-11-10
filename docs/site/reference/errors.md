@@ -140,6 +140,31 @@ taken`) are data for your users, and are not affected by any of the above.
 - Never the value of a [redacted](/guide/schemas#fields) field. A database message that may quote a value is left out of the message and kept on
   `cause`.
 
+`console.log(error)` and `util.inspect(error)` are safe to use: they show the stack, the
+identifier, the code and the other fields, but not the database's own text, which may
+quote a value. `ConstraintError.detail` is shown as hidden, and the cause as one line of
+names and codes, an Egon error by its identifier and a driver's error by its code:
+
+```text
+ConstraintError: constraint.violated: The database rejected the write: … {
+  id: 'constraint.violated',
+  code: 'constraint',
+  type: 'unique',
+  constraint: 'accounts_token_hash_key',
+  table: 'accounts',
+  column: undefined,
+  detail: (hidden: read error.detail),
+  sql: 'insert into "accounts" ("email", "token_hash") values ($1, $2) returning "id"',
+  [cause]: error 23505 (hidden: read error.cause)
+}
+```
+
+The properties are unchanged: reading `error.detail` or `error.cause` yourself gives the
+raw text, quoted values included, for debugging. Node's own printer of an uncaught
+exception or unhandled rejection does not use custom inspection, so it prints that text:
+catch errors before they reach the top level, and log them by `message` or `toJSON()`.
+See [SECURITY.md](https://github.com/egon-orm/egon-orm/blob/main/SECURITY.md).
+
 ## See also
 
 - [FAQ and troubleshooting](/guide/faq): the messages people meet first, and their fixes.

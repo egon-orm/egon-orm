@@ -2,7 +2,7 @@
 // packages/postgres/test/secrets.itest.ts: a redacted field's value and the connection's
 // password appear in no log line, error message, JSON, or inspect output of the repo, the
 // adapter and a transaction. MySQL's own message of a duplicate key quotes the value; it
-// stays on `error.cause` (see SECURITY.md).
+// stays on `error.cause`, which inspect output of the error leaves out (see SECURITY.md).
 import { randomUUID } from "node:crypto";
 import { inspect } from "node:util";
 import {
@@ -101,8 +101,12 @@ describe.runIf(tier2Enabled())("mysql secrets", () => {
     expect(lines.join("")).toContain("**redacted**");
     expect(lines.join("")).not.toContain(SECRET);
     expect(JSON.stringify(events)).not.toContain(SECRET);
-    // MySQL's message ("Duplicate entry '…' for key …") is the cause's.
-    expect(inspect(error)).toContain(SECRET);
+    // MySQL's message ("Duplicate entry '…' for key …") is the cause's: it is read, not inspected.
+    expect(((error as Error).cause as Error).message).toContain(SECRET);
+    expect(inspect(error)).not.toContain(SECRET);
+    expect(shown(error)).not.toContain(SECRET);
+    expect(inspect(error)).toContain("[cause]: Error ER_DUP_ENTRY (hidden: read error.cause)");
+    expect(shown(events)).not.toContain(SECRET);
   });
 
   test("the password: not in the error of an unreachable server, nor in the repo or adapter", async () => {
