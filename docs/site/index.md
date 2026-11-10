@@ -25,8 +25,9 @@ features:
     details: No lazy loading and no save() on rows; a missing preload is a compile error, not an extra query. Nothing joins a transaction you did not open; a single call that writes several statements is atomic on its own.
 ---
 
-::: warning Work in progress
-Egon ORM is under construction and nothing is published to npm yet.
+::: info 0.x release
+Egon ORM 0.1.0 is on npm. Before 1.0 a minor release can make breaking changes; see
+[Upgrading](/reference/upgrading).
 :::
 
 ## Install

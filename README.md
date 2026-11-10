@@ -1,7 +1,7 @@
 <h1><picture><source media="(prefers-color-scheme: dark)" srcset="docs/site/public/logo-dark.png"><img src="docs/site/public/logo.png" alt="" height="48" align="center" hspace="4"></picture>Egon ORM</h1>
 
 [![CI](https://github.com/egon-orm/egon-orm/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/egon-orm/egon-orm/actions/workflows/ci.yml)
-![Status: under construction](https://img.shields.io/badge/status-under%20construction-orange)
+[![npm](https://img.shields.io/npm/v/egon-orm)](https://www.npmjs.com/package/egon-orm)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fegon-orm.github.io%2Fegon-orm%2Fbadges%2Fcoverage.json)](https://github.com/egon-orm/egon-orm/actions/workflows/docs.yml)
 [![Docs](https://img.shields.io/badge/docs-egon--orm.github.io-137c3d)](https://egon-orm.github.io/egon-orm/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -22,8 +22,9 @@ composable **queries** and a **repo**, typed end to end with no code generation.
   writes several statements (a parent with its children, a chunked `insertAll`) is atomic
   on its own.
 
-> **Status: under construction.** Nothing is published to npm yet. The design and build
-> plan live in [`docs/plan/README.md`](docs/plan/README.md).
+> **Status: 0.x.** 0.1.0 is on npm. Before 1.0 a minor release can make breaking changes
+> ([versioning policy](docs/site/reference/upgrading.md)). The design and build plan live in
+> [`docs/plan/README.md`](docs/plan/README.md).
 
 ## Install
 

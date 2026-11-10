@@ -787,11 +787,11 @@ None is data loss, an injection path or a hole in Egon's own code.
 | P8 | Low | 44 dev-only advisories (11 high) in vitepress/vite, miniflare/undici/sharp, verdaccio/body-parser, tsup/esbuild, Stryker/qs, fast-uri; none in a published package | no | 21-packaging's area | §10 list |
 | P9 | Low | Docs build not warning-free (Vite chunk-size; the deploy job also prints a `punycode` DEP0040 warning from `actions/deploy-pages`), and nothing fails on a warning; `status/20.md` says "no warnings" | no | docs | §10 list; **addressed by #77** (`status/21-release-fixes.md` §6) |
 | P10 | Low | Leak assertions missing from the write, preload and nested conformance suites; no global teardown check (box 11.5) | no | core test support | §10 list; **addressed by #77** (`status/21-release-fixes.md` §5) |
-| P11 | Low | Pre-release wording: "under construction, nothing is published to npm yet" in `README.md:4,25`, `docs/site/index.md:29`, `guide/index.md:4,69`, `reference/roadmap.md:3,16`; and the date of "0.1.0 (unreleased)" in `CHANGELOG.md` | at release | owner / docs | part of the release checklist (§9) |
+| P11 | Low | Pre-release wording: "under construction, nothing is published to npm yet" in `README.md:4,25`, `docs/site/index.md:29`, `guide/index.md:4,69`, `reference/roadmap.md:3,16`; and the date of "0.1.0 (unreleased)" in `CHANGELOG.md` | at release | owner / docs | part of the release checklist (§9); **done after the release** (`status/21-post-release.md`) |
 | P12 | Low | Node 22.12.0 prints `ExperimentalWarning` for `require()` of the ES modules (22.23.1 prints none); not mentioned in the getting-started note on CommonJS | no | docs | §10 list |
 | P13 | Low | Test-strength gaps found while re-verifying (each with evidence in §6): `changeset/sharing.test.ts:101` boundary test does not recurse into `nested/` and `validators/`; the builder immutability test leaves out about a dozen methods (`builder.test.ts:1167-1210`); five preload loading cases have no query count (`preload/index.ts:779,909,939,1115,1132`); `check-docs.mjs` `ENTRY_POINTS` misses `egon-orm/messages` (`scripts/check-docs.mjs:44-53`); about 150 plain `TypeError`/`Error` throws (option checks) have no error identifier; `CliError` is not an `EgonError`; the sandbox is used by the write suite only | no | the owning areas | §10 list (one entry) |
 | P14 | Info | Naming and typing notes: `ErrorMessagesOf` could now be `ErrorMessages` (freed by [#62](https://github.com/egon-orm/egon-orm/pull/62)); `Json` types floats as `number` though `NaN`/`±Infinity` serialise as `null`; the validator-promise error has id `query.validatorPromise` though it is a changeset error | no | owner (API names) | in §10; **addressed in part by #77** (the `ErrorMessagesOf` → `ErrorMessages` rename, `status/21-release-fixes.md` §3) |
-| P15 | Info | Not exercised before a real publish: npm provenance and trusted publishing, the release workflow's jobs on GitHub, the weekly soak workflow | first publish | owner | release checklist (§9) |
+| P15 | Info | Not exercised before a real publish: npm provenance and trusted publishing, the release workflow's jobs on GitHub, the weekly soak workflow | first publish | owner | release checklist (§9); **provenance and the release jobs checked, the soak not** (§9) |
 
 ## 8. Proposed gate for 1.0
 
@@ -826,34 +826,86 @@ Everything here would be checked the same way as this report: re-verified, with 
 
 ## 9. Before the first publish: the checklist
 
+`0.1.0` is published (all six packages, 2026-11-09 and 2026-11-10, §9.1). The items below are
+as written at the audit; the *State, 2026-11-10* notes were added after the release
+(`status/21-post-release.md`), checked read-only with `gh api`, the run logs and the npm
+registry.
+
 Owner, in the repository settings and on npm (none done today, §4.9):
 
-- O1 set `RELEASE=on`; O2 create the `npm` environment, deployment branches `main` only,
+- [x] O1 set `RELEASE=on`; O2 create the `npm` environment, deployment branches `main` only,
   required reviewers recommended; O3 `NPM_TOKEN` in that environment for the first publish,
   then trusted publishing per package and delete the token; O4 protect `main` (fix the
   `main-protection` ruleset's empty include, or add branch protection: one approval, the `ci`
   check, squash only); O5 enable private vulnerability reporting; O6 allow GitHub Actions to
   create pull requests (and give the version job a token whose PRs start CI).
-- Publish a placeholder for the unscoped `egon-orm` name now, or publish `0.1.0` soon.
+  *State, 2026-11-10:* O1 `RELEASE=on`. O2 environment `npm` with required reviewers and
+  the one deployment branch `main`. O3 replaced by trusted publishing (owner decision,
+  2026-11-09, `status/21-trusted-publishing.md`): no Actions secret, and both publish logs
+  show `HAS_NPM_TOKEN: false`. O4 the rules on `main` require the `ci` check and allow
+  squash only; required approvals 0 by owner decision (2026-11-09): every pull request is
+  opened and merged from the owner's account, which cannot approve its own pull request, so
+  a required approval would block every merge. O5 private vulnerability reporting
+  enabled. O6 `can_approve_pull_request_reviews: true`; "Version packages"
+  ([#79](https://github.com/egon-orm/egon-orm/pull/79)) was opened by the workflow, and its
+  CI runs follow the approval procedure in CONTRIBUTING.md rather than a separate token.
+- [x] Publish a placeholder for the unscoped `egon-orm` name now, or publish `0.1.0` soon.
+  *State, 2026-11-10:* `0.0.1` placeholders of all six packages, then `0.1.0`.
 
 Owner decisions (§10 items 3 and 4):
 
-- P2: decide the 50 ms per-expression budget (accept the miss, or exclude the one-time
-  first-expression cost).
-- P6: accept explicitly that `0.1.0` ships with the query and compiler survivors sampled,
-  not triaged.
+- [x] P2: decide the 50 ms per-expression budget (accept the miss, or exclude the one-time
+  first-expression cost). *State:* decided 2026-10-24, done in #77.
+- [x] P6: accept explicitly that `0.1.0` ships with the query and compiler survivors sampled,
+  not triaged. *State:* accepted 2026-10-24.
 
 Before the version PR is merged:
 
-- P1: raise the Zod peer floor to `^4.6.6` and the pins to 4.6.7 (needs the owner's
-  approval: it is a peer-range change).
-- P3: say "tested on Postgres 16" wherever "14 or later" is claimed, or add a 14 job.
-- P11: update the "under construction" wording and the changelog date.
+- [x] P1: raise the Zod peer floor to `^4.6.6` and the pins to 4.6.7 (needs the owner's
+  approval: it is a peer-range change). *State:* done in #77.
+- [x] P3: say "tested on Postgres 16" wherever "14 or later" is claimed, or add a 14 job.
+  *State:* done in #77 with the CI job `integration (database floors)`, Postgres 14.24 and
+  MySQL 8.0.31.
+- [x] P11: update the "under construction" wording and the changelog date. *State:* done
+  after the release, not before the version PR was merged, in the post-release PR
+  (`status/21-post-release.md`): the wording in `README.md`, `docs/site/index.md`,
+  `guide/index.md` and `reference/roadmap.md`, and `## 0.1.0 (2026-11-10)` in the root
+  `CHANGELOG.md`.
 
 At and after the first publish:
 
-- P15: check what cannot be exercised before a real publish: npm provenance and trusted
+- [ ] P15: check what cannot be exercised before a real publish: npm provenance and trusted
   publishing, the release workflow's jobs on GitHub, the weekly soak workflow.
+  *State, 2026-11-10:* two of the three are checked. **Trusted publishing and provenance:**
+  each of the six `0.1.0` versions on npm has an SLSA v1 provenance attestation whose
+  workflow is `.github/workflows/release.yml` at `refs/heads/main`, and whose run is
+  [42717306800](https://github.com/egon-orm/egon-orm/actions/runs/42717306800) (`egon-orm`,
+  `@egon-orm/postgres`) or
+  [42862675990](https://github.com/egon-orm/egon-orm/actions/runs/42862675990) (the other
+  four). **The release workflow's jobs:** `select mode`, `check and pack` and `publish` ran
+  in both runs (the second one completely); six tags `<name>@0.1.0` at `592b861` and six
+  GitHub releases exist. **The weekly soak workflow is not verified by this release**: the
+  release does not run it. Separately, `robustness.yml` has run on its Monday schedule three
+  times (2026-10-26, 2026-11-02, 2026-11-09, all green; the last one's `soak` job ran 31
+  minutes, at `c62128e`); none has run since the release.
+
+### 9.1 The partial publish of 2026-11-09
+
+The first release run,
+[42717306800](https://github.com/egon-orm/egon-orm/actions/runs/42717306800) (push of #79 to
+`main`), published `egon-orm@0.1.0` and `@egon-orm/postgres@0.1.0` and failed for
+`@egon-orm/cli`, `mysql`, `sqlite` and `zod`, each with `ERR_PNPM_FAILED_TO_PUBLISH …
+(status 404 Not Found): {"error":"Not found"}`. The cause, as the owner found it: those four
+packages' trusted-publisher configurations on npmjs.com named the workflow `package.yml`
+instead of `release.yml`, so npm refused the publish and answered 404 (not verified by me:
+the configurations are on npmjs.com). The run still created the tags and releases of the two
+it published. After the owner corrected the four configurations, a `workflow_dispatch` of
+`release.yml` on `main`,
+[42862675990](https://github.com/egon-orm/egon-orm/actions/runs/42862675990), published only
+the four: its publish plan said "These packages will be published as they were not found in
+the registry: @egon-orm/cli@0.1.0, @egon-orm/mysql@0.1.0, @egon-orm/sqlite@0.1.0,
+@egon-orm/zod@0.1.0" and "2 packages are already published", and its publish step
+"Successfully published" the four. CONTRIBUTING.md "Releases" now names both points.
 
 ## 10. Needs the owner's decision: the tracked list of open items
 

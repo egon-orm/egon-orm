@@ -377,7 +377,9 @@ that the pnpm that runs in the workspace is the one `packageManager` pins). The 
 was a `0.0.1` placeholder the owner published by hand; each package then has, as its
 trusted publisher on npmjs.com, the repository `egon-orm/egon-orm`, the workflow
 `release.yml` and the environment `npm`, so no publish from the workflow creates a
-package. npm's docs say a new trusted publisher must complete its first publish within 2
+package. The workflow filename must be exactly `release.yml`: with any other name npm
+answers the publish with `404 Not Found` (four packages' first `0.1.0` publish failed this
+way). npm's docs say a new trusted publisher must complete its first publish within 2
 days or it expires and must be created again
 ([Trusted publishing](https://docs.npmjs.com/trusted-publishers)), so set them up close to
 the first release; npmjs.com shows each new one as "Pending validation" with its deadline.
@@ -385,7 +387,10 @@ Under "Allowed actions" in the trusted publisher form, tick **Allow npm publish*
 workflow publishes directly (`pnpm publish`), and without that permission npm refuses the
 publish (only `npm stage publish` is always allowed). A refused `egon-orm` publish also
 stops the other five, which `changeset publish` attempts only after it. Leave **Allow npm
-dist-tag** unticked; the workflow runs no dist-tag command. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc` if one is
+dist-tag** unticked; the workflow runs no dist-tag command. If a publish fails for some
+packages only, fix the cause and run the workflow again with
+`gh workflow run release.yml --ref main`: the publish plan then holds only the versions not
+yet on npm, and the run publishes, tags and releases just those. The workflow still writes an `NPM_TOKEN` secret to `~/.npmrc` if one is
 set; none is, and pnpm prefers the OIDC token anyway.
 
 `pnpm release:dry-run` (`scripts/release-dry-run.mjs`, also the `release dry run` CI job)
