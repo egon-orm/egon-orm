@@ -843,7 +843,9 @@ Owner, in the repository settings and on npm (none done today, §4.9):
   the one deployment branch `main`. O3 replaced by trusted publishing (owner decision,
   2026-11-09, `status/21-trusted-publishing.md`): no Actions secret, and both publish logs
   show `HAS_NPM_TOKEN: false`. O4 the rules on `main` require the `ci` check and allow
-  squash only; the required approvals are 0, not one. O5 private vulnerability reporting
+  squash only; required approvals 0 by owner decision (2026-11-09): every pull request is
+  opened and merged from the owner's account, which cannot approve its own pull request, so
+  a required approval would block every merge. O5 private vulnerability reporting
   enabled. O6 `can_approve_pull_request_reviews: true`; "Version packages"
   ([#79](https://github.com/egon-orm/egon-orm/pull/79)) was opened by the workflow, and its
   CI runs follow the approval procedure in CONTRIBUTING.md rather than a separate token.
