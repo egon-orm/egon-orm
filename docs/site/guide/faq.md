@@ -276,20 +276,23 @@ migrating it.
 Yes, with the gaps listed in [Dialect support](/reference/dialect-support). Postgres
 supports every feature.
 
-### Why are editor completions slow in a large model?
+### Are editor completions slow in a large model?
 
-After an edit, the editor checks the types again before it can offer completions. Inside
-a query callback, such as `where(({ u }) => u.)`, that takes about 40 ms plus 1.1 to 1.2 ms
-for every schema reachable from the query's schema through associations. On the machine
-measured, completions passed 200 ms at about 140 to 170 connected schemas, and they cross
-it sooner on a slower one. A model of a few dozen schemas does not notice. The likely
-cause is that the association and preload types make the checker infer every static
-member of each reachable schema, the `changeset` methods above all; the fix is on the
-[roadmap](/reference/roadmap).
+Not in a query callback. After an edit, the editor checks the types again before it can
+offer completions. Inside a callback such as `where(({ u }) => u.)`, `orderBy`, `groupBy`,
+`having` or a join's `on`, that costs the same in a model of 200 connected schemas as in
+one of ten: about 25 ms on the machine measured.
 
-Until then, declare the return type of your `changeset` methods. In one measurement with
-200 schemas, that brought completions down to about 114 ms. Include in the type the error
-keys that the validations add, such as `passwordConfirmation` from
+One case still grows with the model: a callback inside a callback that returns the query,
+such as `preload("posts", (q) => q.where(({ posts }) => posts.))` or
+`pipe((q) => q.where(…))`. There the cost grows with the number of schemas reachable from
+the query's schema through associations: about 270 ms with 200 connected schemas on the
+same machine. A model of a few dozen schemas does not notice. About half of that is the
+editor inferring the return types of the reachable schemas' `changeset` methods; the fix
+is on the [roadmap](/reference/roadmap).
+
+If that case is slow for you, declare the return type of your `changeset` methods. Include
+in the type the error keys that the validations add, such as `passwordConfirmation` from
 `validateConfirmation("password")`, or `errorMessages()` loses them:
 
 <<< @/examples/faq-completions.ts#completions

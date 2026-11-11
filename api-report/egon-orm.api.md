@@ -743,7 +743,7 @@ export class Changeset<S extends ChangesetSource = AnySchema, New extends boolea
     noAssocConstraint(assoc: AssocName<S>, options?: ConstraintOptions): this;
     optimisticLock<K extends FieldName<S>>(field: K, increment?: (current: NonNullable<FieldValues<S>[K]>) => NonNullable<FieldValues<S>[K]>): this;
     readonly params: Readonly<Record<string, unknown>> | null;
-    pipe<R>(fn: (changeset: this) => R): R;
+    pipe<R>(fn: (changeset: NoInfer<this>) => R): R;
     readonly prepare: readonly PrepareFunction<S, New>[];
     prepareChanges(fn: PrepareFunction<S, New>): this;
     putAssoc<const K extends AssocName<S>>(name: K, value: PutAssocValue<S, K>): this;
@@ -3711,44 +3711,44 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     // Warning: (ae-forgotten-export) The symbol "ParamsOfList" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
-    distinct<X extends ExprList>(fn: (bindings: B) => X): AddParams<this, ParamsOfList<X>>;
+    distinct<X extends ExprList>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOfList<X>>;
     except<Q0 extends QueryLike, Q2 extends QueryLike>(this: Q0, other: Q2 & SameResult<QueryResult<Q0>, QueryResult<Q2>>): WithResult<Q0, QueryResult<Q0>, QueryParams<Q2>>;
     exceptAll<Q0 extends QueryLike, Q2 extends QueryLike>(this: Q0, other: Q2 & SameResult<QueryResult<Q0>, QueryResult<Q2>>): WithResult<Q0, QueryResult<Q0>, QueryParams<Q2>>;
     // Warning: (ae-forgotten-export) The symbol "ExcludedResult" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "RootRowOf" needs to be exported by the entry point index.d.ts
     exclude<Q0 extends QueryLike, C extends ExcludableClause>(this: Q0, clause: C): C extends "windows" ? Query<BindingsOf<Q0>, QueryResult<Q0>, QueryParams<Q0>, RootOf<Q0>> : WithResult<Q0, ExcludedResult<C, QueryResult<Q0>, RootRowOf<Q0>>>;
-    fullJoin<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: NullableAll<B> & {
+    fullJoin<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: NoInfer<NullableAll<B> & {
         readonly [K in A2]: NullableBinding<BindingOfSource<Src>>;
-    }) => X): Next<Q0, NullableAll<BindingsOf<Q0>> & {
+    }>) => X): Next<Q0, NullableAll<BindingsOf<Q0>> & {
         readonly [K in A2]: NullableBinding<BindingOfSource<Src>>;
     }, QueryResult<Q0> | null, JoinParams<ParamsOfSource<Src>, ParamsOf<X>>>;
-    groupBy<X extends ExprList>(fn: (bindings: B) => X): AddParams<this, ParamsOfList<X>>;
+    groupBy<X extends ExprList>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOfList<X>>;
     hasBinding(alias: string): boolean;
-    having<X extends Condition>(fn: (bindings: B) => X): AddParams<this, ParamsOf<X>>;
+    having<X extends Condition>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOf<X>>;
     intersect<Q0 extends QueryLike, Q2 extends QueryLike>(this: Q0, other: Q2 & SameResult<QueryResult<Q0>, QueryResult<Q2>>): WithResult<Q0, QueryResult<Q0>, QueryParams<Q2>>;
     intersectAll<Q0 extends QueryLike, Q2 extends QueryLike>(this: Q0, other: Q2 & SameResult<QueryResult<Q0>, QueryResult<Q2>>): WithResult<Q0, QueryResult<Q0>, QueryParams<Q2>>;
     // Warning: (ae-forgotten-export) The symbol "Condition" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "NewAlias" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "Next" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "BindingsOf" needs to be exported by the entry point index.d.ts
-    join<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: B & {
+    join<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: NoInfer<B & {
         readonly [K in A2]: BindingOfSource<Src>;
-    }) => X): Next<Q0, BindingsOf<Q0> & {
+    }>) => X): Next<Q0, BindingsOf<Q0> & {
         readonly [K in A2]: BindingOfSource<Src>;
     }, QueryResult<Q0>, JoinParams<ParamsOfSource<Src>, ParamsOf<X>>>;
-    joinAssoc<Q0 extends QueryLike, F extends keyof B & string, K extends AssocKeys<SchemaOfBinding<B[F]>>, const A2 extends string, X extends Condition = Expr<boolean, NoParams>>(this: Q0, from: F, assoc: K, alias: A2 & NewAlias<A2, B>, on?: (bindings: B & {
+    joinAssoc<Q0 extends QueryLike, F extends keyof B & string, K extends AssocKeys<SchemaOfBinding<B[F]>>, const A2 extends string, X extends Condition = Expr<boolean, NoParams>>(this: Q0, from: F, assoc: K, alias: A2 & NewAlias<A2, B>, on?: (bindings: NoInfer<B & {
         readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>>;
-    }) => X): Next<Q0, BindingsOf<Q0> & {
+    }>) => X): Next<Q0, BindingsOf<Q0> & {
         readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>>;
     }, QueryResult<Q0>, ParamsOf<X>>;
-    leftJoin<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: B & {
+    leftJoin<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: NoInfer<B & {
         readonly [K in A2]: NullableBinding<BindingOfSource<Src>>;
-    }) => X): Next<Q0, BindingsOf<Q0> & {
+    }>) => X): Next<Q0, BindingsOf<Q0> & {
         readonly [K in A2]: NullableBinding<BindingOfSource<Src>>;
     }, QueryResult<Q0>, JoinParams<ParamsOfSource<Src>, ParamsOf<X>>>;
-    leftJoinAssoc<Q0 extends QueryLike, F extends keyof B & string, K extends AssocKeys<SchemaOfBinding<B[F]>>, const A2 extends string, X extends Condition = Expr<boolean, NoParams>>(this: Q0, from: F, assoc: K, alias: A2 & NewAlias<A2, B>, on?: (bindings: B & {
+    leftJoinAssoc<Q0 extends QueryLike, F extends keyof B & string, K extends AssocKeys<SchemaOfBinding<B[F]>>, const A2 extends string, X extends Condition = Expr<boolean, NoParams>>(this: Q0, from: F, assoc: K, alias: A2 & NewAlias<A2, B>, on?: (bindings: NoInfer<B & {
         readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>, true>;
-    }) => X): Next<Q0, BindingsOf<Q0> & {
+    }>) => X): Next<Q0, BindingsOf<Q0> & {
         readonly [N in A2]: Binding<Target<SchemaOfBinding<B[F]>, K>, true>;
     }, QueryResult<Q0>, ParamsOf<X>>;
     limit<N extends number | Expr<number | bigint, SomeParams>>(n: N): AddParams<this, ParamsOf<N>>;
@@ -3760,10 +3760,10 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     offset<N extends number | Expr<number | bigint, SomeParams>>(n: N): AddParams<this, ParamsOf<N>>;
     // Warning: (ae-forgotten-export) The symbol "OrderItem" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "OrderLeaves" needs to be exported by the entry point index.d.ts
-    orderBy<X extends OrderItem | readonly OrderItem[] | readonly []>(fn: (bindings: B) => X & WindowCheck<OrderLeaves<X>, W>): AddParams<this, ParamsOfList<X>>;
+    orderBy<X extends OrderItem | readonly OrderItem[] | readonly []>(fn: (bindings: NoInfer<B>) => X & WindowCheck<OrderLeaves<X>, W>): AddParams<this, ParamsOfList<X>>;
     orWhere(conditions: RootWhere<B, A>): this;
     // (undocumented)
-    orWhere<X extends Condition>(fn: (bindings: B) => X): AddParams<this, ParamsOf<X>>;
+    orWhere<X extends Condition>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOf<X>>;
     pipe<T>(fn: (query: this) => T): T;
     // Warning: (ae-forgotten-export) The symbol "ValidSpec" needs to be exported by the entry point index.d.ts
     // Warning: (ae-forgotten-export) The symbol "NormalizeSpec" needs to be exported by the entry point index.d.ts
@@ -3776,9 +3776,9 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     returning<Q0 extends QueryLike, X extends SelectInput>(this: Q0, fn: (bindings: BindingsOf<Q0>) => X & SelectTypes<X> & NoWindowCheck<SelectLeaves<X>>): WithResult<Q0, SelectResult<Q0, X>, SelectParams<X>>;
     reverseOrder(): this;
     // Warning: (ae-forgotten-export) The symbol "NullableAll" needs to be exported by the entry point index.d.ts
-    rightJoin<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: NullableAll<B> & {
+    rightJoin<Q0 extends QueryLike, const A2 extends string, Src extends Source_2, X extends Condition>(this: Q0, source: Src, alias: A2 & NewAlias<A2, B>, on: (bindings: NoInfer<NullableAll<B> & {
         readonly [K in A2]: BindingOfSource<Src>;
-    }) => X): Next<Q0, NullableAll<BindingsOf<Q0>> & {
+    }>) => X): Next<Q0, NullableAll<BindingsOf<Q0>> & {
         readonly [K in A2]: BindingOfSource<Src>;
     }, QueryResult<Q0> | null, JoinParams<ParamsOfSource<Src>, ParamsOf<X>>>;
     schema(name: string): this;
@@ -3809,7 +3809,7 @@ export class Query<B, R, P = NoParams, A extends string = string, W extends stri
     // Warning: (ae-forgotten-export) The symbol "AddParams" needs to be exported by the entry point index.d.ts
     //
     // (undocumented)
-    where<X extends Condition>(fn: (bindings: B) => X): AddParams<this, ParamsOf<X>>;
+    where<X extends Condition>(fn: (bindings: NoInfer<B>) => X): AddParams<this, ParamsOf<X>>;
     // Warning: (ae-forgotten-export) The symbol "WindowDefParams" needs to be exported by the entry point index.d.ts
     windows<Q0 extends QueryLike, const D extends WindowDefs<B>>(this: Q0, defs: D): Query<BindingsOf<Q0>, QueryResult<Q0>, WithParams<QueryParams<Q0>, WindowDefParams<D>>, RootOf<Q0>, WindowsOf<Q0> | (keyof D & string)>;
     withCte<Q0 extends QueryLike, Q2 extends QueryLike>(this: Q0, name: string, query: Q2, options?: CteOptions): WithResult<Q0, QueryResult<Q0>, QueryParams<Q2>>;
