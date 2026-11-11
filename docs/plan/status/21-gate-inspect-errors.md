@@ -138,7 +138,16 @@ the errors reference say to catch errors before the top level and log `message` 
 - **The stack keeps the message**: Egon messages never hold a value, so nothing is removed
   from them.
 
-## Needs the owner's decision
+## Owner decisions (2026-11-10, relayed by the coordinator in review round 1)
+
+- **Size: keep the method on the base class, and judge step 21a's "`EgonError` alone under
+  1 KB" by gzip.** It is 0.9 KB gzip: 887 bytes before review round 1, 1,637 minified and
+  910 gzip after it (**measured**, esbuild over the built dist).
+  The plan files are not edited; this note records the reading.
+- **Uncaught-exception printing: accept and document**, as SECURITY.md and the errors
+  reference do, with the pinning test (`test/security/inspect.test.ts`) kept.
+
+What was put to the owner:
 
 - **Step 21a's box "Importing `EgonError` alone bundles to under 1 KB"** (ticked at 0.7 KB)
   is no longer true minified: 1.6 KB (0.9 KB gzip, under 1 KB). The box was a proof that the
@@ -169,6 +178,24 @@ changeset's and the query builder's. No export was added and no signature change
   worker held the load average at 50: `cli.itest.ts`'s `beforeAll` (240 s, it builds three
   packages) and one test of `compiler/advanced/advanced.itest.ts` (30 s). Neither touches
   inspect output. Both files re-run alone: 62 of 62 passed.
+
+## Review round 1 (changes requested, four findings, all fixed)
+
+1. **A cause with a throwing getter or Proxy trap made inspect throw** (main showed
+   `[Getter]` / `{}`). `causeLine` now reads each link inside a `try`; if a read throws, that
+   link is shown by its `typeof` and the chain ends. Tests: "a cause whose getter throws is
+   shown by its kind, and the chain ends there", "a Proxy cause whose trap throws is shown by
+   its kind".
+2. **Causes that are not the database's lose their message and stack** in inspect output
+   (a `TypeError` from a migration's `up()`, for example). Kept by design, since a cause
+   cannot be classified reliably; now said in the changeset and in `reference/errors.md`,
+   which points to `console.log(error.cause)`.
+3. **`status/21-security.md`** lines 213, 237, 352 (and the "Gaps" line on F4 and F5) now
+   point to #81 or are in the past tense.
+4. **The example in `reference/errors.md`** shows the stack frames (`    at … {`).
+
+After the round: `pnpm check` passes, `pnpm api:check` passes (unchanged), the three
+secrets itests pass (16 of 16, `--maxWorkers=2`, tier 2 on) (**verified**).
 
 ## Requests
 

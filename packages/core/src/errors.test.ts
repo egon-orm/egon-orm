@@ -750,6 +750,34 @@ describe("inspect output", () => {
     expect(shown).toContain(`[cause]: ${line} (hidden: read error.cause)`);
   });
 
+  test("a cause whose getter throws is shown by its kind, and the chain ends there", () => {
+    const cause = {
+      get name(): string {
+        throw new Error("boom");
+      },
+    };
+    const outer = new QueryError("query.unsupportedFeature", "q", {
+      cause: new DatabaseError("database.rejected", "x", { cause }),
+    });
+    expect(inspect(outer)).toContain(
+      "[cause]: DatabaseError database.rejected <- object (hidden: read error.cause)",
+    );
+  });
+
+  test("a Proxy cause whose trap throws is shown by its kind", () => {
+    const cause = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error("trap");
+        },
+      },
+    );
+    const error = new DatabaseError("database.rejected", "x", { cause });
+    expect(() => inspect(error)).not.toThrow();
+    expect(inspect(error)).toContain("[cause]: object (hidden: read error.cause)");
+  });
+
   test("a cause with a numeric code shows it", () => {
     expect(inspect(violation({ name: "SqlError", code: 1062 }))).toContain(
       "[cause]: SqlError 1062 (hidden: read error.cause)",

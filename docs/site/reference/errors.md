@@ -146,7 +146,8 @@ quote a value. `ConstraintError.detail` is shown as hidden, and the cause as one
 names and codes, an Egon error by its identifier and a driver's error by its code:
 
 ```text
-ConstraintError: constraint.violated: The database rejected the write: … {
+ConstraintError: constraint.violated: The database rejected the write: … See https://…
+    at … {
   id: 'constraint.violated',
   code: 'constraint',
   type: 'unique',
@@ -160,8 +161,11 @@ ConstraintError: constraint.violated: The database rejected the write: … {
 ```
 
 The properties are unchanged: reading `error.detail` or `error.cause` yourself gives the
-raw text, quoted values included, for debugging. Node's own printer of an uncaught
-exception or unhandled rejection does not use custom inspection, so it prints that text:
+raw text, quoted values included, for debugging. Every cause is shown by name and code
+only, including one that is not the database's (a `TypeError` thrown in a migration's
+`up()`); to see the cause and where it was thrown, use `console.log(error.cause)`.
+Node's own printer of an uncaught exception or unhandled rejection does not use custom
+inspection, so it prints that text:
 catch errors before they reach the top level, and log them by `message` or `toJSON()`.
 See [SECURITY.md](https://github.com/egon-orm/egon-orm/blob/main/SECURITY.md).
 

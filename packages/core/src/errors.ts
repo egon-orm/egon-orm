@@ -214,12 +214,22 @@ const INSPECT: unique symbol = /* @__PURE__ */ Symbol.for("nodejs.util.inspect.c
 function causeLine(cause: unknown): string {
   let line = "";
   for (let each = cause, n = 0; each !== undefined && n < 8; n++) {
-    // Object() boxes a primitive, so that reading its fields gives undefined.
-    const { name, code, cause: next } = Object(each) as Record<string, unknown>;
-    const label = isEgonError(each) ? each.id : code;
-    line += `${line && " <- "}${typeof name === "string" ? name : typeof each}${
-      typeof label === "string" || typeof label === "number" ? ` ${label}` : ""
-    }`;
+    let link: string = typeof each;
+    let next: unknown;
+    try {
+      // Object() boxes a primitive, so that reading its fields gives undefined. A getter
+      // or a Proxy trap may throw: the link is then shown by its kind, and the chain ends.
+      const fields = Object(each) as Record<string, unknown>;
+      const name = fields.name;
+      const label = isEgonError(each) ? each.id : fields.code;
+      link = `${typeof name === "string" ? name : link}${
+        typeof label === "string" || typeof label === "number" ? ` ${label}` : ""
+      }`;
+      next = fields.cause;
+    } catch {
+      next = undefined;
+    }
+    line += `${line && " <- "}${link}`;
     each = next;
   }
   return `${line} (hidden: read error.cause)`;
