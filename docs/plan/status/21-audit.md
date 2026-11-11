@@ -802,7 +802,9 @@ Everything here would be checked the same way as this report: re-verified, with 
    to `not.toContain(SECRET)`.
 2. **Editor completions under 200 ms on the 200-schema project** in every connected topology
    (chain, tree, hub), measured with `scripts/type-health/measure.mjs`, and every
-   expression within the 50 ms budget as the owner defines it for `0.1.0` (P2).
+   expression within the 50 ms budget as the owner defines it for `0.1.0` (P2). Done in
+   [#82](https://github.com/egon-orm/egon-orm/pull/82): 20–26 ms on all three
+   (`status/21-gate-completions.md`).
 3. **Query and compiler survivors triaged one by one**, as the changeset area was ([#74](https://github.com/egon-orm/egon-orm/pull/74)), with a
    test for every real gap; re-run Stryker on all three areas at the 1.0 candidate, each ≥ 80%
    with no untriaged logic survivor.

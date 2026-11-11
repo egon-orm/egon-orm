@@ -1,6 +1,7 @@
 # Step 21, 1.0 gate item 2 (completions), status
 
-Branch `step/21-gate-completions`, from `main` at `a118ddf`. Inputs: `status/21-audit.md`
+Branch `step/21-gate-completions`, from `main` at `a118ddf`; PR
+[#82](https://github.com/egon-orm/egon-orm/pull/82). Inputs: `status/21-audit.md`
 §4.2 and §8 item 2, `status/21-api.md` §3, `03-types.md`, the roadmap row "Faster editor
 completions in large models" and the FAQ entry "Why are editor completions slow in a large
 model?".
