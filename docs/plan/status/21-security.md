@@ -15,7 +15,7 @@ injection: every site that writes SQL text was read and holds.
 | F1 | Medium | The connection string and password were reachable by `util.inspect` (depth > 2) of a repo, an adapter or a transaction | **Fixed** |
 | F2 | Low | `castAssoc` / `putAssoc` matched items to loaded children with one scan per item: quadratic in attacker-controlled input | **Fixed** |
 | F3 | Low | `castAssoc` read an item's key through the prototype chain | **Fixed** |
-| F4 | Medium | A redacted value can appear in `util.inspect` of an error (and of a query event holding it), through the database's own text: `ConstraintError.detail`, `error.cause` | **Owner's decision**; documented in SECURITY.md |
+| F4 | Medium | A redacted value can appear in `util.inspect` of an error (and of a query event holding it), through the database's own text: `ConstraintError.detail`, `error.cause` | **Fixed** for `util.inspect`, `console.log` and `util.format` (1.0 gate item 1, PR #81, `status/21-gate-inspect-errors.md`): every Egon error's custom inspect hides `detail` and shows the cause chain as names and codes. Not fixable: Node's printer of an uncaught error skips custom inspect; documented in SECURITY.md |
 | F5 | Low | A changeset without a schema class has no `codegen` opt-out: its `validate()` tries `new Function` | **Owner's decision**; documented |
 | F6 | Info | A self-recursive changeset function over a very deep embed ends in a stack overflow | Documented |
 | F7 | Info | `cast()` on an existing changeset copies the params: linear in the number of keys sent | Documented |
@@ -210,7 +210,8 @@ its `query` listener, and an adapter listener with `{ params: true }`:
   declared unique constraint gives `has already been taken`, without the value.
 - An undeclared unique violation (`ConstraintError`) and a value the database cannot
   convert (`DatabaseError`, 22P02): message, JSON and log line clean; `detail` and
-  `inspect(error)` hold the value (F4, pinned by the test).
+  `inspect(error)` held the value (F4, pinned by the test). Fixed in #81: the test now
+  expects `inspect(error)` without the value; `detail` still holds it.
 - The password, in a connection string that is unreachable, has a bad port, does not parse,
   has an unknown `sslmode` or a host that does not resolve: in no error message, stack,
   JSON, log line or inspect output of the repo and adapter; a wrong password is not echoed;
@@ -234,7 +235,7 @@ A visible consequence: calling an adapter's (or a connection's) methods through 
 of it, or on `Object.create(adapter)`, now throws `TypeError`, since an ES private field is
 reachable only from the object itself. Nothing in the library or its tests does that.
 
-**F4 (Medium, needs the owner's decision).** Egon's messages, `toJSON()`, log lines and
+**F4 (Medium; fixed in #81 by option 1 below, the owner's decision for the 1.0 gate).** Egon's messages, `toJSON()`, log lines and
 the JSON of query events never hold a value. The database's own text does: Postgres puts
 `Key (token_hash)=(<value>) already exists.` in the `detail` of a unique violation (copied
 to `ConstraintError.detail`) and quotes a value it cannot convert in its message; MySQL's
@@ -351,7 +352,7 @@ nothing to reporters.
 
 - **F4 (Medium):** whether `ConstraintError` / `DatabaseError` should hide `detail` and the
   driver's cause from `util.inspect`. Recommendation: document for `0.1.0` (done), custom
-  inspect before `1.0`.
+  inspect before `1.0`. Decided (custom inspect, a 1.0 gate item) and fixed in #81.
 - **F5 (Low):** whether schemaless changesets should stop generating code. Recommendation:
   yes, never generate for schemaless field tables.
 - **Enable GitHub private vulnerability reporting** on `egon-orm/egon-orm`; SECURITY.md
@@ -367,7 +368,7 @@ nothing to reporters.
   real adapters' error messages are checked by the dialect packages' secrets tests. The
   built binary was not run against a failing server.
 - SQLite has no password; its secrets were not tested beyond the ReDoS and error patterns.
-- F4 and F5 are open.
+- F4 and F5 were open when this was written. F5 was fixed in #72, F4 in #81.
 
 ## Requests
 

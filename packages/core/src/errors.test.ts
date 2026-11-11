@@ -1,3 +1,6 @@
+import { Console } from "node:console";
+import { Writable } from "node:stream";
+import { format, inspect } from "node:util";
 import { beforeEach, describe, expect, test } from "vitest";
 import type { ChangesetLike } from "./contracts/changeset.js";
 import {
@@ -637,5 +640,214 @@ describe("message-only errors", () => {
     const error = new ErrorClass(id as never, message);
     expect(shortMessageOf(error)).toBe(message);
     expect(error.message).toBe(`${id}: ${message} See ${docsLink(id)}`);
+  });
+});
+
+describe("inspect output", () => {
+  // What a unique violation of a redacted column carries: Postgres's own text quotes it.
+  const SECRET = "tok-4f1e9a";
+  const pgError = Object.assign(
+    new Error(`duplicate key value: Key (token_hash)=(${SECRET}) already exists.`),
+    {
+      name: "error",
+      code: "23505",
+      detail: `Key (token_hash)=(${SECRET}) already exists.`,
+    },
+  );
+  const violation = (cause: unknown = pgError) =>
+    new ConstraintError({
+      type: "unique",
+      constraint: "accounts_token_hash_key",
+      table: "accounts",
+      column: "token_hash",
+      detail: `Key (token_hash)=(${SECRET}) already exists.`,
+      sql: 'insert into "accounts" ("token_hash") values ($1)',
+      cause,
+    });
+
+  test("a constraint error shows its fields and stack, without the database's detail or the cause's text", () => {
+    const error = violation();
+    const shown = inspect(error);
+    expect(shown).not.toContain(SECRET);
+    expect(shown.startsWith(String(error.stack))).toBe(true);
+    expect(shown.slice(String(error.stack).length)).toBe(
+      [
+        " {",
+        "  id: 'constraint.violated',",
+        "  code: 'constraint',",
+        "  type: 'unique',",
+        "  constraint: 'accounts_token_hash_key',",
+        "  table: 'accounts',",
+        "  column: 'token_hash',",
+        "  detail: (hidden: read error.detail),",
+        `  sql: 'insert into "accounts" ("token_hash") values ($1)',`,
+        "  [cause]: error 23505 (hidden: read error.cause)",
+        "}",
+      ].join("\n"),
+    );
+  });
+
+  test("the properties still hold the database's text", () => {
+    const error = violation();
+    expect(error.detail).toContain(SECRET);
+    expect(error.cause).toBe(pgError);
+  });
+
+  test("an undefined detail and no cause are shown as they are", () => {
+    const error = new ConstraintError({
+      type: "check",
+      constraint: undefined,
+      table: undefined,
+      column: undefined,
+      detail: undefined,
+    });
+    const shown = inspect(error);
+    expect(shown).toContain("  detail: undefined,");
+    expect(shown).not.toContain("[cause]");
+  });
+
+  test("a database error shows its identifier, code, retryability and statement; its cause as name and code", () => {
+    const error = new DatabaseError("database.rejected", "The driver reported an error.", {
+      code: "database",
+      sql: "select $1::integer",
+      cause: Object.assign(new Error(`invalid input syntax for type integer: "${SECRET}"`), {
+        code: "22P02",
+      }),
+    });
+    const shown = inspect(error);
+    expect(shown).not.toContain(SECRET);
+    expect(shown).toContain("  id: 'database.rejected',\n  code: 'database',\n  retryable: false,");
+    expect(shown).toContain("  sql: 'select $1::integer',");
+    expect(shown).toContain("  [cause]: Error 22P02 (hidden: read error.cause)\n}");
+  });
+
+  test("a cause chain is one line of names and codes, Egon errors by identifier", () => {
+    const inner = new DatabaseError("database.rejected", "x", { cause: pgError });
+    const middle = new QueryError("query.unsupportedFeature", "y", { cause: inner });
+    const shown = inspect(new CastError("cast.paramsNotObject", "z", { cause: middle }));
+    expect(shown).not.toContain(SECRET);
+    expect(shown).toContain(
+      "[cause]: QueryError query.unsupportedFeature <- DatabaseError database.rejected <- error 23505 (hidden: read error.cause)",
+    );
+  });
+
+  test("a cyclic cause chain stops after eight links", () => {
+    const a: { name: string; code: string; cause?: unknown } = { name: "A", code: "1" };
+    a.cause = a;
+    expect(inspect(new MigrationError("migration.failed", "m", { cause: a }))).toContain(
+      `[cause]: ${Array(8).fill("A 1").join(" <- ")} (hidden: read error.cause)`,
+    );
+  });
+
+  test.each([
+    ["a thrown string", `the value was ${SECRET}`, "string"],
+    ["an object without a name or code", { message: SECRET }, "object"],
+    ["a number", 42, "number"],
+    ["null", null, "object"],
+  ])("a cause that is %s is shown by its kind only", (_, cause, line) => {
+    const shown = inspect(new DatabaseError("database.rejected", "x", { cause }));
+    expect(shown).not.toContain(SECRET);
+    expect(shown).toContain(`[cause]: ${line} (hidden: read error.cause)`);
+  });
+
+  test("a cause whose getter throws is shown by its kind, and the chain ends there", () => {
+    const cause = {
+      get name(): string {
+        throw new Error("boom");
+      },
+    };
+    const outer = new QueryError("query.unsupportedFeature", "q", {
+      cause: new DatabaseError("database.rejected", "x", { cause }),
+    });
+    expect(inspect(outer)).toContain(
+      "[cause]: DatabaseError database.rejected <- object (hidden: read error.cause)",
+    );
+  });
+
+  test("a Proxy cause whose trap throws is shown by its kind", () => {
+    const cause = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error("trap");
+        },
+      },
+    );
+    const error = new DatabaseError("database.rejected", "x", { cause });
+    expect(() => inspect(error)).not.toThrow();
+    expect(inspect(error)).toContain("[cause]: object (hidden: read error.cause)");
+  });
+
+  test("a cause with a numeric code shows it", () => {
+    expect(inspect(violation({ name: "SqlError", code: 1062 }))).toContain(
+      "[cause]: SqlError 1062 (hidden: read error.cause)",
+    );
+  });
+
+  test.each(EVERY_ERROR)("%o: inspect, format and console paths use it", (error) => {
+    const withCause = rewrap(new QueryError("query.unsupportedFeature", "q", { cause: pgError }), (s) => s);
+    for (const value of [error, withCause]) {
+      const shown = inspect(value);
+      expect(shown.startsWith(String(value.stack))).toBe(true);
+      expect(shown).not.toContain(SECRET);
+      expect(format("%o", value)).not.toContain(SECRET);
+      expect(format("%o", value).startsWith(String(value.stack))).toBe(true);
+      expect(format("%O", value)).toBe(shown);
+      expect(format("%s", value)).not.toContain(SECRET);
+      expect(format(value)).toBe(shown);
+      expect(inspect(value, { showHidden: true, depth: Number.POSITIVE_INFINITY })).not.toContain(SECRET);
+      expect(inspect({ event: { error: value } }, { depth: 5 })).not.toContain(SECRET);
+    }
+  });
+
+  test("console.log prints the same as inspect", () => {
+    const lines: string[] = [];
+    const stream = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        lines.push(String(chunk));
+        done();
+      },
+    });
+    const out = new Console({ stdout: stream, stderr: stream });
+    const error = violation();
+    out.log(error);
+    out.error(error);
+    expect(lines.join("")).toBe(`${inspect(error)}\n${inspect(error)}\n`);
+  });
+
+  test("nested values are inspected one level deeper, and indented", () => {
+    const error = new RollbackError({
+      reason: { step: "insert", error: violation(), completed: { a: { b: 1 } } },
+    });
+    const shown = inspect(error);
+    expect(shown).not.toContain(SECRET);
+    expect(shown).toContain("\n  reason: {\n    step: 'insert',");
+    expect(shown).toContain("completed: { a: [Object] }");
+    expect(inspect(error, { depth: null })).toContain("completed: { a: { b: 1 } }");
+  });
+
+  test("without Node's inspect function, values are shown as strings", () => {
+    const error = violation();
+    const custom = (error as unknown as Record<symbol, (depth: number, options: object) => string>)[
+      Symbol.for("nodejs.util.inspect.custom")
+    ];
+    const shown = custom?.call(error, 2, {}) ?? "";
+    expect(shown).toContain("  code: constraint,");
+    expect(shown).toContain("  detail: (hidden: read error.detail),");
+    expect(shown).not.toContain(SECRET);
+  });
+
+  test("an error without a stack starts with its name and message", () => {
+    const error = new NoResultsError();
+    Object.defineProperty(error, "stack", { value: undefined });
+    expect(inspect(error).startsWith(`NoResultsError: ${error.message} {`)).toBe(true);
+  });
+
+  test("toJSON is unchanged", () => {
+    expect(JSON.parse(JSON.stringify(violation()))).toStrictEqual({
+      name: "ConstraintError",
+      code: "constraint",
+      id: "constraint.violated",
+    });
   });
 });

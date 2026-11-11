@@ -665,6 +665,7 @@ export interface DropTableOptions {
 abstract class EgonError extends Error {
     // (undocumented)
     readonly [BRAND] = true;
+    [INSPECT](depth: number | null, options: object, inspect?: (value: unknown, options: object) => string): string;
     // Warning: (ae-forgotten-export) The symbol "ErrorDetails" needs to be exported by the entry point migration.d.ts
     constructor(id: ErrorId, message: string, details?: ErrorDetails);
     // Warning: (ae-forgotten-export) The symbol "ErrorCode" needs to be exported by the entry point migration.d.ts
@@ -1056,6 +1057,9 @@ type InsertSource = {
     readonly kind: "query";
     readonly query: QueryAst;
 };
+
+// @public
+const INSPECT: unique symbol;
 
 // @public
 type IsolationLevel = "read committed" | "repeatable read" | "serializable";

@@ -203,6 +203,38 @@ function compose(
 /** Marks an error as Egon's across copies of the package (`Symbol.for` is process-wide). */
 const BRAND: unique symbol = /* @__PURE__ */ Symbol.for("egon.error");
 
+/** Node's `util.inspect.custom`, which Deno and Bun honour too. Looked up by name: no import of `node:util`. */
+const INSPECT: unique symbol = /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom");
+
+/**
+ * A cause chain on one line, without any message: an Egon error's name and identifier,
+ * another error's name and code (a SQLSTATE, an `ER_` or `SQLITE_` code). The text of a
+ * database's error may quote a value.
+ */
+function causeLine(cause: unknown): string {
+  let line = "";
+  for (let each = cause, n = 0; each !== undefined && n < 8; n++) {
+    let link: string = typeof each;
+    let next: unknown;
+    try {
+      // Object() boxes a primitive, so that reading its fields gives undefined. A getter
+      // or a Proxy trap may throw: the link is then shown by its kind, and the chain ends.
+      const fields = Object(each) as Record<string, unknown>;
+      const name = fields.name;
+      const label = isEgonError(each) ? each.id : fields.code;
+      link = `${typeof name === "string" ? name : link}${
+        typeof label === "string" || typeof label === "number" ? ` ${label}` : ""
+      }`;
+      next = fields.cause;
+    } catch {
+      next = undefined;
+    }
+    line += `${line && " <- "}${link}`;
+    each = next;
+  }
+  return `${line} (hidden: read error.cause)`;
+}
+
 /** The short sentence and parameters of each error, for {@link shortMessageOf} and {@link rewrap}. */
 const parts = /* @__PURE__ */ new WeakMap<
   object,
@@ -256,6 +288,47 @@ export abstract class EgonError extends Error {
    */
   toJSON(): { readonly name: string; readonly code: ErrorCode; readonly id: ErrorId } {
     return { name: this.name, code: this.code, id: this.id };
+  }
+
+  /**
+   * What `console.log(error)` and `util.inspect(error)` show: the stack (with the message)
+   * and the error's fields, except that the database's own text is left out, since it may
+   * quote a value: `detail` is shown as hidden, and the cause as one line of names and
+   * codes. `error.detail` and `error.cause` still hold the text.
+   *
+   * @example
+   * ```ts
+   * console.log(error);
+   * // ConstraintError: constraint.violated: The database rejected the write: … {
+   * //   id: 'constraint.violated',
+   * //   code: 'constraint',
+   * //   …
+   * //   detail: (hidden: read error.detail),
+   * //   [cause]: error 23505 (hidden: read error.cause)
+   * // }
+   * ```
+   */
+  [INSPECT](
+    depth: number | null,
+    options: object,
+    inspect?: (value: unknown, options: object) => string,
+  ): string {
+    // Without Node's inspect (a runtime that calls this with no arguments), values as strings.
+    const show: (value: unknown, options: object) => string = inspect ?? String;
+    const nested = { ...options, depth: depth === null ? null : depth - 1 };
+    const fields = this as unknown as Readonly<Record<string, unknown>>;
+    let text = `${this.stack ?? `${this.name}: ${this.message}`} {`;
+    for (const key of Object.keys(this)) {
+      const value = fields[key];
+      if (key !== "name") {
+        text += `\n  ${key}: ${
+          key === "detail" && value !== undefined
+            ? "(hidden: read error.detail)"
+            : show(value, nested).replaceAll("\n", "\n  ")
+        },`;
+      }
+    }
+    return `${this.cause === undefined ? text.slice(0, -1) : `${text}\n  [cause]: ${causeLine(this.cause)}`}\n}`;
   }
 }
 

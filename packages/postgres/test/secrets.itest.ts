@@ -6,9 +6,9 @@
 //
 // What is outside that promise, and checked here so that a change to it is noticed:
 // `ConstraintError.detail` and `error.cause` are the database's own text, which may quote
-// the conflicting value, so inspecting such an error (or a query event that holds it)
-// shows the value; JSON of the error does not (see SECURITY.md, and "Needs the owner's
-// decision" in docs/plan/status/21-security.md). `changeset.params` are the params as given.
+// the conflicting value. Inspecting such an error (or a query event that holds it) leaves
+// that text out (F4 of docs/plan/status/21-security.md); reading the properties gives it
+// (see SECURITY.md). `changeset.params` are the params as given.
 import { randomUUID } from "node:crypto";
 import { inspect } from "node:util";
 import { createTestDatabase, type TestDatabase, type TestDatabaseHandle } from "@egon-orm/test-support";
@@ -193,7 +193,7 @@ describe("a redacted field's value", () => {
     expect(everything()).not.toContain(SECRET);
   });
 
-  test("an undeclared violation: the error's message, JSON and log line hold no value; its detail and cause do", async () => {
+  test("an undeclared violation: the error's message, JSON, log line and inspect output hold no value; its detail and cause do", async () => {
     const { repo, lines, events, everything } = observed();
     await repo.insertOrThrow(cast(Account, { email: "a@b.c", tokenHash: SECRET }, ["email", "tokenHash"]));
     const error = await repo
@@ -205,13 +205,18 @@ describe("a redacted field's value", () => {
     expect(JSON.stringify(violation)).not.toContain(SECRET);
     expect(lines.some((line) => line.includes("-- error: ConstraintError"))).toBe(true);
     expect(everything()).not.toContain(SECRET);
-    // The database's own text: documented in SECURITY.md, recorded in status/21-security.md.
+    // The database's own text is on the properties (SECURITY.md), not in inspect output.
     expect(violation.detail).toContain(SECRET);
-    expect(inspect(violation)).toContain(SECRET);
-    expect(inspect(events.at(-1)?.error)).toContain(SECRET);
+    expect(String((violation.cause as { detail?: unknown }).detail)).toContain(SECRET);
+    expect(inspect(violation)).not.toContain(SECRET);
+    expect(shown(violation)).not.toContain(SECRET);
+    expect(inspect(violation)).toContain("[cause]: error 23505 (hidden: read error.cause)");
+    expect(events.at(-1)?.error).toBeInstanceOf(ConstraintError);
+    expect(inspect(events.at(-1)?.error)).not.toContain(SECRET);
+    expect(shown(events)).not.toContain(SECRET);
   });
 
-  test("a value the database cannot convert: the error's message leaves the database's text out", async () => {
+  test("a value the database cannot convert: the error's message and inspect output leave the database's text out", async () => {
     const { repo, everything } = observed();
     await repo.insertOrThrow(cast(Account, { email: "a@b.c", recovery: SECRET }, ["email", "recovery"]));
     // The stored value, read as an integer: Postgres's message quotes it.
@@ -221,8 +226,10 @@ describe("a redacted field's value", () => {
     expect((error as Error).message).not.toContain(SECRET);
     expect(JSON.stringify(error)).not.toContain(SECRET);
     expect(everything()).not.toContain(SECRET);
-    // The cause is Postgres's error, whose message quotes the value.
-    expect(inspect(error)).toContain(SECRET);
+    // The cause is Postgres's error, whose message quotes the value: it is read, not inspected.
+    expect(((error as Error).cause as Error).message).toContain(SECRET);
+    expect(shown(error)).not.toContain(SECRET);
+    expect(inspect(error)).toContain("[cause]: error 22P02 (hidden: read error.cause)");
   });
 });
 

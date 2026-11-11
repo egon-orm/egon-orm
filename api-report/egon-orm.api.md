@@ -1290,6 +1290,7 @@ export interface DynamicMethods<Bs, X> {
 export abstract class EgonError extends Error {
     // (undocumented)
     readonly [BRAND] = true;
+    [INSPECT_2](depth: number | null, options: object, inspect?: (value: unknown, options: object) => string): string;
     constructor(id: ErrorId, message: string, details?: ErrorDetails);
     abstract readonly code: ErrorCode;
     readonly id: ErrorId;
@@ -2065,6 +2066,9 @@ const INSPECT$1: unique symbol;
 
 // @public
 const INSPECT: unique symbol;
+
+// @public
+const INSPECT_2: unique symbol;
 
 // @public
 export class InvalidChangesetError<C extends ChangesetLike = ChangesetLike> extends EgonError {

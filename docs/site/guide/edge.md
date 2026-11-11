@@ -80,7 +80,7 @@ Measured from the packed packages with esbuild, minified, `pg` left out
 | Schemas only | 51 KB | 17 KB |
 | `cast` | 100 KB | 31 KB |
 | A query, not run | 121 KB | 38 KB |
-| `EgonError` only | 0.7 KB | 0.5 KB |
+| `EgonError` only | 1.6 KB | 0.9 KB |
 | `egon-orm/messages` (the full messages, when imported) | 68 KB | 19 KB |
 
 The packages are published one file per module, with `"sideEffects": false`, so a bundler
